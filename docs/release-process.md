@@ -47,8 +47,8 @@ The PAT expires every 90 days.
 
 1. Go to https://github.com/settings/tokens?type=beta
 2. Renew the token (or generate a new one with the same permissions).
-3. Update the secret in the private repo:
-   github.com → kb-ai-usage → Settings → Secrets and variables → Actions →
+3. Update the secret in the source repo:
+   github.com → ai-usage → Settings → Secrets and variables → Actions →
    `RELEASES_REPO_TOKEN` → Update secret.
 
 ## Rolling back a bad release
