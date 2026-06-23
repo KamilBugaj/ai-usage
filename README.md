@@ -100,3 +100,6 @@ Open an [issue](../../issues) in this repo.
 ## License
 
 [MIT](./LICENSE) © Kamil Bugaj
+
+Bundled third-party components (Avalonia, CommunityToolkit.Mvvm, the Inter font,
+Microsoft Edge WebView2) are attributed in [THIRD-PARTY-NOTICES.txt](./THIRD-PARTY-NOTICES.txt).
