@@ -25,15 +25,15 @@ Two stages:
 
 **Job `publish`** (needs: build):
 - Downloads all artifacts
-- Creates a GitHub Release in the public repo via `softprops/action-gh-release@v2`
-- Token: `RELEASES_REPO_TOKEN` (secret in the private repo)
+- Creates a GitHub Release in the releases repo via `softprops/action-gh-release@v2`
+- Token: `RELEASES_REPO_TOKEN` (secret in this source repo)
 
 ## Cross-repo push
 
-The private CI pushes a Release to `KamilBugaj/ai-usage-app-releases` using a
+CI pushes a Release to `KamilBugaj/ai-usage-app-releases` using a
 fine-grained PAT with `Contents: Read and write` permission scoped to that repo only.
 
-Secret: `RELEASES_REPO_TOKEN` in `kb-ai-usage`.
+Secret: `RELEASES_REPO_TOKEN` in `ai-usage`.
 
 The PAT expires every 90 days — see `docs/release-process.md` → Rotating the token.
 
@@ -68,6 +68,6 @@ Tags containing `-` (e.g. `-beta`, `-rc1`) are automatically marked as pre-relea
 
 ## Secrets
 
-| Secret               | Where set              | Notes                                     |
-|----------------------|------------------------|-------------------------------------------|
-| `RELEASES_REPO_TOKEN`| kb-ai-usage → Settings | Fine-grained PAT, expires every 90 days   |
+| Secret               | Where set            | Notes                                     |
+|----------------------|----------------------|-------------------------------------------|
+| `RELEASES_REPO_TOKEN`| ai-usage → Settings  | Fine-grained PAT, expires every 90 days   |
