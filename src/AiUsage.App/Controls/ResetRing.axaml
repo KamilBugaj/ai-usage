@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:AiUsage.App.Converters"
+             x:Class="AiUsage.App.Controls.ResetRing"
+             x:Name="Root">
+    <!-- Transparent background makes the whole disc hit-testable so the reset tooltip
+         shows when hovering anywhere over the ring, not only on the thin stroke. -->
+    <Grid Width="{Binding Diameter, ElementName=Root}"
+          Height="{Binding Diameter, ElementName=Root}"
+          Background="Transparent">
+        <!-- track -->
+        <Ellipse Stroke="{DynamicResource TrackBrush}"
+                 StrokeThickness="{Binding Thickness, ElementName=Root}"
+                 Margin="{Binding Thickness, ElementName=Root}"/>
+        <!-- elapsed sweep (starts at top, fills clockwise) -->
+        <Arc StartAngle="-90"
+             SweepAngle="{Binding Fraction, ElementName=Root, Converter={x:Static conv:FractionToSweepConverter.Instance}}"
+             Stroke="{Binding RingBrush, ElementName=Root}"
+             StrokeThickness="{Binding Thickness, ElementName=Root}"
+             StrokeLineCap="Round"
+             Margin="{Binding Thickness, ElementName=Root}"/>
+        <TextBlock Text="{Binding CenterText, ElementName=Root}"
+                   FontSize="{Binding CenterFontSize, ElementName=Root}"
+                   Foreground="{DynamicResource SubtextBrush}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
+</UserControl>

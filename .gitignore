@@ -1,0 +1,29 @@
+# Internal agent task tracking — not project artifacts
+tasks/
+docs/ci-release-plan.md
+
+# Secrets — never in the repo
+config/config.json
+*.env
+.env
+
+# Build .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+
+# Build output (local publish / installer)
+dist/
+publish/
+
+# IDE
+.vs/
+.idea/
+
+# SQLite (local database)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite

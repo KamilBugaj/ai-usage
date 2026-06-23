@@ -1,0 +1,111 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:AiUsage.App.Features.Claude"
+             xmlns:conv="using:AiUsage.App.Converters"
+             xmlns:ctrl="using:AiUsage.App.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             x:Class="AiUsage.App.Features.Claude.ClaudeTileView"
+             x:DataType="local:ClaudeTileViewModel">
+
+    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10"
+            BorderBrush="{DynamicResource DangerBrush}"
+            BorderThickness="{Binding AlertActive, Converter={x:Static conv:BoolToThicknessConverter.Instance}}">
+        <StackPanel Spacing="6">
+
+            <!-- Header: logo + title + alert badge -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Viewbox Grid.Column="0" Width="18" Height="18" Margin="0,0,8,0"
+                         VerticalAlignment="Center">
+                    <Path Data="{StaticResource ClaudeLogoGeometry}" Fill="#D97757"/>
+                </Viewbox>
+                <TextBlock Grid.Column="1" Text="{Binding Title}"
+                           FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="⚠" FontSize="13"
+                           Foreground="{DynamicResource DangerBrush}"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding AlertActive}"/>
+            </Grid>
+
+            <TextBlock Text="Loading…" FontSize="13" Foreground="{DynamicResource MutedBrush}"
+                       IsVisible="{Binding IsLoading}"/>
+
+            <TextBlock Text="{Binding ErrorMessage}" FontSize="13" Foreground="{DynamicResource DangerBrush}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap"/>
+
+            <StackPanel Spacing="6" IsVisible="{Binding !IsLoading}">
+
+                <!-- Session limit bar: "5h [====] 62% ◔" (always shown, both sizes) -->
+                <StackPanel Spacing="3" IsVisible="{Binding HasLimit}">
+                    <Grid ColumnDefinitions="22,*,38,Auto">
+                        <TextBlock Grid.Column="0" Text="5h" FontSize="12"
+                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                        <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Utilization}"
+                                     Height="7" CornerRadius="3"
+                                     Background="{DynamicResource TrackBrush}">
+                            <ProgressBar.Foreground>
+                                <MultiBinding Converter="{x:Static conv:UtilizationToBrushConverter.Instance}">
+                                    <Binding Path="Utilization"/>
+                                    <Binding Path="AlertThreshold"/>
+                                </MultiBinding>
+                            </ProgressBar.Foreground>
+                        </ProgressBar>
+                        <TextBlock Grid.Column="2" Text="{Binding UtilizationLabel}" FontSize="12"
+                                   Foreground="{DynamicResource SubtextBrush}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <ctrl:ResetRing Grid.Column="3" Margin="6,0,0,0" VerticalAlignment="Center"
+                                        Diameter="18" Thickness="3"
+                                        RingBrush="{DynamicResource AccentBrush}"
+                                        Fraction="{Binding SessionResetFraction}"
+                                        ToolTip.Tip="{Binding ResetsAt}"/>
+                    </Grid>
+                    <TextBlock Text="{Binding ResetsAt}" FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                               Margin="22,0,0,0" IsVisible="{Binding IsLarge}"/>
+                </StackPanel>
+
+                <!-- Weekly limit bar (both sizes; reset text large only) -->
+                <StackPanel Spacing="3" IsVisible="{Binding HasWeeklyLimit}">
+                    <Grid ColumnDefinitions="22,*,38,Auto">
+                        <TextBlock Grid.Column="0" Text="7d" FontSize="12"
+                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                        <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding WeeklyUtilization}"
+                                     Height="7" CornerRadius="3"
+                                     Background="{DynamicResource TrackBrush}">
+                            <ProgressBar.Foreground>
+                                <MultiBinding Converter="{x:Static conv:UtilizationToBrushConverter.Instance}">
+                                    <Binding Path="WeeklyUtilization"/>
+                                    <Binding Path="AlertThreshold"/>
+                                </MultiBinding>
+                            </ProgressBar.Foreground>
+                        </ProgressBar>
+                        <TextBlock Grid.Column="2" Text="{Binding WeeklyLabel}" FontSize="12"
+                                   Foreground="{DynamicResource SubtextBrush}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <ctrl:ResetRing Grid.Column="3" Margin="6,0,0,0" VerticalAlignment="Center"
+                                        Diameter="18" Thickness="3"
+                                        RingBrush="{DynamicResource AccentBrush}"
+                                        Fraction="{Binding WeeklyResetFraction}"
+                                        ToolTip.Tip="{Binding WeeklyResetsAt}"/>
+                    </Grid>
+                    <TextBlock Text="{Binding WeeklyResetsAt}" FontSize="11"
+                               Foreground="{DynamicResource MutedBrush}" Margin="22,0,0,0"
+                               IsVisible="{Binding IsLarge}"/>
+                </StackPanel>
+
+                <!-- Last updated (large only) -->
+                <TextBlock Text="{Binding UpdatedAt}" FontSize="10" Foreground="{DynamicResource FaintBrush}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="UpdatedAt" Converter="{x:Static StringConverters.IsNotNullOrEmpty}"/>
+                            <Binding Path="IsLarge"/>
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

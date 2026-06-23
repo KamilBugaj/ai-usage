@@ -1,0 +1,56 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AiUsage.App.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- Default palette (Catppuccin Mocha). ThemeService overrides these at runtime
+                 so views using {DynamicResource ...} update live for the colour preview. -->
+            <SolidColorBrush x:Key="BgBrush" Color="#1E1E2E"/>
+            <SolidColorBrush x:Key="SurfaceBrush" Color="#313244"/>
+            <SolidColorBrush x:Key="Surface2Brush" Color="#45475A"/>
+            <SolidColorBrush x:Key="TrackBrush" Color="#45475A"/>
+            <SolidColorBrush x:Key="TextBrush" Color="#CDD6F4"/>
+            <SolidColorBrush x:Key="SubtextBrush" Color="#BAC2DE"/>
+            <SolidColorBrush x:Key="MutedBrush" Color="#6C7086"/>
+            <SolidColorBrush x:Key="FaintBrush" Color="#585B70"/>
+            <SolidColorBrush x:Key="AccentBrush" Color="#89B4FA"/>
+            <SolidColorBrush x:Key="SuccessBrush" Color="#A6E3A1"/>
+            <SolidColorBrush x:Key="WarningBrush" Color="#F9E2AF"/>
+            <SolidColorBrush x:Key="DangerBrush" Color="#F38BA8"/>
+            <SolidColorBrush x:Key="OnAccentBrush" Color="#1E1E2E"/>
+
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="/Controls/ProviderLogos.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+
+    <Application.DataTemplates>
+        <DataTemplate DataType="{x:Type x:String}">
+            <TextBlock Text="{Binding}"/>
+        </DataTemplate>
+    </Application.DataTemplates>
+
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon Icon="/Assets/app.ico"
+                      ToolTipText="AI Usage"
+                      Clicked="TrayIcon_Clicked">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Status" Click="TrayMenu_Open"/>
+                        <NativeMenuItem Header="Settings" Click="TrayMenu_Settings"/>
+                        <NativeMenuItemSeparator/>
+                        <NativeMenuItem Header="Quit" Click="TrayMenu_Exit"/>
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
+</Application>

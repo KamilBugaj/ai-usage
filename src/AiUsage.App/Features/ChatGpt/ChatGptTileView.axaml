@@ -1,0 +1,72 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:AiUsage.App.Features.ChatGpt"
+             xmlns:conv="using:AiUsage.App.Converters"
+             xmlns:ctrl="using:AiUsage.App.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             x:Class="AiUsage.App.Features.ChatGpt.ChatGptTileView"
+             x:DataType="local:ChatGptTileViewModel">
+
+    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10"
+            BorderBrush="{DynamicResource DangerBrush}"
+            BorderThickness="{Binding AlertActive, Converter={x:Static conv:BoolToThicknessConverter.Instance}}">
+        <StackPanel Spacing="6">
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Viewbox Grid.Column="0" Width="18" Height="18" Margin="0,0,8,0"
+                         VerticalAlignment="Center">
+                    <Path Data="{StaticResource ChatGptLogoGeometry}" Fill="{DynamicResource TextBrush}"/>
+                </Viewbox>
+                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="⚠" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding AlertActive}"/>
+            </Grid>
+
+            <TextBlock Text="Loading…" FontSize="12" Foreground="{DynamicResource MutedBrush}"
+                       IsVisible="{Binding IsLoading}"/>
+
+            <TextBlock Text="{Binding ErrorMessage}" FontSize="12" Foreground="{DynamicResource DangerBrush}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap"/>
+
+            <StackPanel Spacing="4" IsVisible="{Binding !IsLoading}">
+                <TextBlock Text="{Binding StatusLine}" FontSize="12" Foreground="{DynamicResource SubtextBrush}"/>
+
+                <StackPanel Spacing="2" IsVisible="{Binding HasLimit}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <ProgressBar Grid.Column="0" Minimum="0" Maximum="1" Value="{Binding Utilization}"
+                                     Height="6" CornerRadius="3" VerticalAlignment="Center"
+                                     Background="{DynamicResource TrackBrush}">
+                            <ProgressBar.Foreground>
+                                <MultiBinding Converter="{x:Static conv:UtilizationToBrushConverter.Instance}">
+                                    <Binding Path="Utilization"/>
+                                    <Binding Path="AlertThreshold"/>
+                                </MultiBinding>
+                            </ProgressBar.Foreground>
+                        </ProgressBar>
+                        <ctrl:ResetRing Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                        Diameter="18" Thickness="3"
+                                        RingBrush="{DynamicResource AccentBrush}"
+                                        Fraction="{Binding SessionResetFraction}"
+                                        ToolTip.Tip="{Binding ResetsAt}"/>
+                    </Grid>
+                    <TextBlock Text="{Binding ResetsAt}" FontSize="10" Foreground="{DynamicResource MutedBrush}"
+                               IsVisible="{Binding IsLarge}"/>
+                </StackPanel>
+
+                <TextBlock Text="{Binding UpdatedAt}" FontSize="10" Foreground="{DynamicResource FaintBrush}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="UpdatedAt" Converter="{x:Static StringConverters.IsNotNullOrEmpty}"/>
+                            <Binding Path="IsLarge"/>
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+</UserControl>

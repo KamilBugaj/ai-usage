@@ -1,0 +1,30 @@
+name: Sync public README
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/templates/public-README.md
+      - docs/screenshots/**
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push README and assets to public repo
+        env:
+          TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+        run: |
+          git clone https://x-access-token:${TOKEN}@github.com/KamilBugaj/ai-usage-app-releases.git public-repo
+          cp docs/templates/public-README.md public-repo/README.md
+          mkdir -p public-repo/docs/screenshots
+          cp docs/screenshots/app-preview.png public-repo/docs/screenshots/app-preview.png
+          cd public-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/
+          git diff --staged --quiet || git commit -m "docs: sync README from kb-ai-usage"
+          git push

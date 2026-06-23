@@ -1,0 +1,220 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AiUsage.App.ViewModels"
+             xmlns:conv="using:AiUsage.App.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="600"
+             x:Class="AiUsage.App.Views.SettingsView"
+             x:Name="Root"
+             x:DataType="vm:MainWindowViewModel">
+
+    <UserControl.Resources>
+        <conv:HexToBrushConverter x:Key="HexToBrush"/>
+    </UserControl.Resources>
+
+    <ScrollViewer MaxHeight="640" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="12" Spacing="10">
+
+            <!-- Header -->
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Settings" FontSize="14" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"/>
+                <Button Grid.Column="1" Content="✕" Background="Transparent"
+                        Foreground="{DynamicResource MutedBrush}"
+                        Padding="4,0" BorderThickness="0" FontSize="13"
+                        Command="{Binding CloseSettingsCommand}" Cursor="Hand"/>
+            </Grid>
+
+            <!-- Appearance -->
+            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Appearance" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"/>
+
+                    <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                        <TextBlock Text="Theme" FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource SubtextBrush}"/>
+                        <ComboBox Grid.Column="1" HorizontalAlignment="Right" MinWidth="140"
+                                  ItemsSource="{Binding Settings.Presets}"
+                                  SelectedItem="{Binding Settings.SelectedPreset}"/>
+                    </Grid>
+
+                    <TextBlock Text="Accent" FontSize="12" Foreground="{DynamicResource SubtextBrush}"/>
+                    <WrapPanel>
+                        <ItemsControl ItemsSource="{Binding Settings.AccentSwatches}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Button Width="26" Height="26" Margin="0,0,6,6"
+                                            CornerRadius="13" BorderThickness="0" Padding="0"
+                                            Cursor="Hand"
+                                            Background="{Binding Converter={StaticResource HexToBrush}}"
+                                            Click="Swatch_Click"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Content="default" FontSize="11" Margin="0,0,6,6"
+                                VerticalAlignment="Center"
+                                Background="{DynamicResource Surface2Brush}"
+                                Foreground="{DynamicResource SubtextBrush}"
+                                Command="{Binding Settings.ResetAccentCommand}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Tiles manager -->
+            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Tiles" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"/>
+                    <TextBlock Text="Drag ⠿ to reorder" FontSize="11"
+                               Foreground="{DynamicResource MutedBrush}"/>
+
+                    <ItemsControl x:Name="RowsHost" ItemsSource="{Binding Settings.TileRows}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="6"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TileSettingRow">
+                                <Border Background="{DynamicResource Surface2Brush}" CornerRadius="6"
+                                        Padding="8,6">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                                          VerticalAlignment="Center">
+                                        <!-- drag handle -->
+                                        <Border Grid.Column="0" Background="Transparent"
+                                                PointerPressed="DragHandle_PointerPressed"
+                                                Cursor="SizeAll" Padding="2,0" Margin="0,0,6,0">
+                                            <TextBlock Text="⠿" FontSize="14"
+                                                       Foreground="{DynamicResource MutedBrush}"/>
+                                        </Border>
+
+                                        <!-- name -->
+                                        <CheckBox Grid.Column="1" IsChecked="{Binding Enabled}"
+                                                  Content="{Binding DisplayName}"
+                                                  Foreground="{DynamicResource TextBrush}" FontSize="12"/>
+
+                                        <!-- large toggle -->
+                                        <CheckBox Grid.Column="2" IsChecked="{Binding IsLarge}"
+                                                  Content="Large" Margin="6,0"
+                                                  Foreground="{DynamicResource SubtextBrush}" FontSize="11"/>
+
+                                        <!-- alert threshold -->
+                                        <TextBox Grid.Column="3" Width="56" FontSize="11"
+                                                 PlaceholderText="off"
+                                                 Text="{Binding AlertThresholdText}"
+                                                 VerticalContentAlignment="Center"/>
+                                        <TextBlock Grid.Column="4" Text="{Binding AlertUnit}"
+                                                   FontSize="11" Margin="4,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource MutedBrush}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Providers / credentials -->
+            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Providers" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"/>
+
+                    <!-- Claude.ai -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Claude.ai" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SubtextBrush}"/>
+                        <TextBlock Text="● Connected" FontSize="11" Foreground="{DynamicResource SuccessBrush}"
+                                   IsVisible="{Binding Settings.ClaudeConnected}"/>
+                        <TextBlock Text="● Not connected" FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                                   IsVisible="{Binding !Settings.ClaudeConnected}"/>
+                        <TextBlock Text="{Binding Settings.ClaudeStatus}" FontSize="11"
+                                   Foreground="{DynamicResource SubtextBrush}" TextWrapping="Wrap"
+                                   IsVisible="{Binding Settings.ClaudeStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Content="{Binding Settings.ConnectLabel}"
+                                    IsEnabled="{Binding !Settings.IsConnecting}"
+                                    Command="{Binding Settings.ConnectClaudeCommand}"
+                                    Padding="12,5" FontSize="12"
+                                    Background="{DynamicResource AccentBrush}"
+                                    Foreground="{DynamicResource OnAccentBrush}" CornerRadius="6"/>
+                            <Button Content="Disconnect"
+                                    IsVisible="{Binding Settings.ClaudeConnected}"
+                                    Command="{Binding Settings.DisconnectClaudeCommand}"
+                                    Padding="12,5" FontSize="12"
+                                    Background="{DynamicResource Surface2Brush}"
+                                    Foreground="{DynamicResource DangerBrush}" CornerRadius="6"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ChatGPT -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="ChatGPT" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SubtextBrush}"/>
+                        <TextBlock Text="● Connected" FontSize="11" Foreground="{DynamicResource SuccessBrush}"
+                                   IsVisible="{Binding Settings.ChatGptConnected}"/>
+                        <TextBlock Text="● Not connected" FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                                   IsVisible="{Binding !Settings.ChatGptConnected}"/>
+                        <TextBlock Text="{Binding Settings.ChatGptStatus}" FontSize="11"
+                                   Foreground="{DynamicResource SubtextBrush}" TextWrapping="Wrap"
+                                   IsVisible="{Binding Settings.ChatGptStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Content="{Binding Settings.ConnectChatGptLabel}"
+                                    IsEnabled="{Binding !Settings.IsConnectingChatGpt}"
+                                    Command="{Binding Settings.ConnectChatGptCommand}"
+                                    Padding="12,5" FontSize="12"
+                                    Background="{DynamicResource AccentBrush}"
+                                    Foreground="{DynamicResource OnAccentBrush}" CornerRadius="6"/>
+                            <Button Content="Disconnect"
+                                    IsVisible="{Binding Settings.ChatGptConnected}"
+                                    Command="{Binding Settings.DisconnectChatGptCommand}"
+                                    Padding="12,5" FontSize="12"
+                                    Background="{DynamicResource Surface2Brush}"
+                                    Foreground="{DynamicResource DangerBrush}" CornerRadius="6"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Copilot -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="GitHub Copilot" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SubtextBrush}"/>
+                        <TextBlock Text="● Connected" FontSize="11" Foreground="{DynamicResource SuccessBrush}"
+                                   IsVisible="{Binding Settings.CopilotConnected}"/>
+                        <TextBlock Text="● Not connected" FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                                   IsVisible="{Binding !Settings.CopilotConnected}"/>
+                        <TextBlock Text="{Binding Settings.CopilotStatus}" FontSize="11"
+                                   Foreground="{DynamicResource SubtextBrush}" TextWrapping="Wrap"
+                                   IsVisible="{Binding Settings.CopilotStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Content="{Binding Settings.ConnectCopilotLabel}"
+                                    IsEnabled="{Binding !Settings.IsConnectingCopilot}"
+                                    Command="{Binding Settings.ConnectCopilotCommand}"
+                                    Padding="12,5" FontSize="12"
+                                    Background="{DynamicResource AccentBrush}"
+                                    Foreground="{DynamicResource OnAccentBrush}" CornerRadius="6"/>
+                            <Button Content="Disconnect"
+                                    IsVisible="{Binding Settings.CopilotConnected}"
+                                    Command="{Binding Settings.DisconnectCopilotCommand}"
+                                    Padding="12,5" FontSize="12"
+                                    Background="{DynamicResource Surface2Brush}"
+                                    Foreground="{DynamicResource DangerBrush}" CornerRadius="6"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Apply -->
+            <Button Content="Apply &amp; save" HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    Command="{Binding Settings.ApplyCommand}"
+                    Padding="12,8" FontSize="13"
+                    Background="{DynamicResource AccentBrush}"
+                    Foreground="{DynamicResource OnAccentBrush}" CornerRadius="6"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

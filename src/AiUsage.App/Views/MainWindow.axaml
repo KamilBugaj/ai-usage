@@ -1,0 +1,64 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AiUsage.App.ViewModels"
+        xmlns:views="using:AiUsage.App.Views"
+        xmlns:claude="using:AiUsage.App.Features.Claude"
+        xmlns:copilot="using:AiUsage.App.Features.Copilot"
+        xmlns:chatgpt="using:AiUsage.App.Features.ChatGpt"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="400"
+        x:Class="AiUsage.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="AI Usage"
+        Width="360"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowDecorations="BorderOnly">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Panel Background="{DynamicResource BgBrush}">
+
+        <!-- Dashboard -->
+        <StackPanel Margin="12" Spacing="8" IsVisible="{Binding !ShowSettings}">
+            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,4">
+                <TextBlock Text="AI Usage" FontSize="14" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"/>
+                <Button Grid.Column="1" Content="⚙" Background="Transparent"
+                        Foreground="{DynamicResource MutedBrush}"
+                        Padding="4,0" BorderThickness="0" FontSize="13"
+                        Command="{Binding OpenSettingsCommand}" Cursor="Hand"/>
+                <Button Grid.Column="2" Content="✕" Background="Transparent"
+                        Foreground="{DynamicResource MutedBrush}"
+                        Padding="4,0" Margin="2,0,0,0" BorderThickness="0" FontSize="13"
+                        Click="Hide_Click" Cursor="Hand" ToolTip.Tip="Hide to tray"/>
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Tiles}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="8"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.DataTemplates>
+                    <DataTemplate DataType="claude:ClaudeTileViewModel">
+                        <claude:ClaudeTileView/>
+                    </DataTemplate>
+                    <DataTemplate DataType="copilot:CopilotTileViewModel">
+                        <copilot:CopilotTileView/>
+                    </DataTemplate>
+                    <DataTemplate DataType="chatgpt:ChatGptTileViewModel">
+                        <chatgpt:ChatGptTileView/>
+                    </DataTemplate>
+                </ItemsControl.DataTemplates>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Settings (in-place, same window) -->
+        <views:SettingsView IsVisible="{Binding ShowSettings}"/>
+
+    </Panel>
+</Window>

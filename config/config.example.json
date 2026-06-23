@@ -1,0 +1,16 @@
+{
+  "claudeWeb": {
+    "sessionKey": "SK-ANT-sid01-...",
+    "cfClearance": "abc123xyz...",
+    "organizationId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "pollIntervalMinutes": 5
+  },
+  "chatGptWeb": {
+    "sessionToken": "eyJhbGci...",
+    "pollIntervalMinutes": 5
+  },
+  "copilot": {
+    "oAuthToken": "gho_...",
+    "pollIntervalMinutes": 5
+  }
+}
