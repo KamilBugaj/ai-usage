@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using AiUsage.App.Infrastructure;
 using AiUsage.App.Theming;
 using AiUsage.Application.Providers;
 using AiUsage.Core.Config;
@@ -65,6 +66,12 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private string _copilotStatus = "";
 
+    // --- Startup ---
+    // Whether the app launches at Windows login (backed by the registry Run key).
+    // Applied immediately on toggle, independent of the Apply & save button.
+    [ObservableProperty] private bool _autostartEnabled;
+    public bool AutostartSupported => _autostart.IsSupported;
+
     public string ConnectLabel => IsConnecting ? "Connecting…"
         : ClaudeConnected                       ? "Reconnect"
         :                                         "Connect";
@@ -83,18 +90,21 @@ public partial class SettingsViewModel : ObservableObject
     private readonly Action<ThemeConfig> _onPreviewTheme;
     private readonly Action<string> _onConnect;
     private readonly Action<string> _onDisconnect;
+    private readonly IAutostartService _autostart;
     private bool _loading;
 
-    public SettingsViewModel() : this(() => { }, _ => { }, _ => { }, _ => { }) { }
+    public SettingsViewModel() : this(() => { }, _ => { }, _ => { }, _ => { }, new NoopAutostartService()) { }
 
     public SettingsViewModel(
         Action onApply, Action<ThemeConfig> onPreviewTheme,
-        Action<string> onConnect, Action<string> onDisconnect)
+        Action<string> onConnect, Action<string> onDisconnect,
+        IAutostartService autostart)
     {
         _onApply = onApply;
         _onPreviewTheme = onPreviewTheme;
         _onConnect = onConnect;
         _onDisconnect = onDisconnect;
+        _autostart = autostart;
     }
 
     public ThemeConfig CurrentTheme => new(SelectedPreset, SelectedAccent);
@@ -111,6 +121,9 @@ public partial class SettingsViewModel : ObservableObject
             ClaudeConnected     = claudeConnected;
             ChatGptConnected    = !string.IsNullOrWhiteSpace(cfg.ChatGptWeb?.SessionToken);
             CopilotConnected    = !string.IsNullOrWhiteSpace(cfg.Copilot?.OAuthToken);
+
+            // Registry is the source of truth for autostart — reflect its live state.
+            AutostartEnabled    = _autostart.IsEnabled;
 
             TileRows.Clear();
             var uiTiles = cfg.Ui?.Tiles ?? [];
@@ -158,6 +171,19 @@ public partial class SettingsViewModel : ObservableObject
 
     partial void OnSelectedPresetChanged(string value) { if (!_loading) PreviewTheme(); }
     partial void OnSelectedAccentChanged(string? value) { if (!_loading) PreviewTheme(); }
+
+    partial void OnAutostartEnabledChanged(bool value)
+    {
+        if (_loading) return;
+        try { _autostart.SetEnabled(value); }
+        catch
+        {
+            // Registry write failed — revert the toggle without re-triggering this handler.
+            _loading = true;
+            AutostartEnabled = !value;
+            _loading = false;
+        }
+    }
 
     private void PreviewTheme() => _onPreviewTheme(CurrentTheme);
 
