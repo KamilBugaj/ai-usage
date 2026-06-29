@@ -32,13 +32,16 @@ public sealed class WindowsAutostartService : IAutostartService
 
     public void SetEnabled(bool enabled)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath);
-        if (key is null) return;
+        // Throw (don't silently no-op) on failure so the caller's toggle reverts
+        // instead of showing "on" while nothing was written to the registry.
+        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath)
+            ?? throw new InvalidOperationException($@"Cannot open HKCU\{RunKeyPath}.");
 
         if (enabled)
         {
             var exe = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exe)) return;
+            if (string.IsNullOrEmpty(exe))
+                throw new InvalidOperationException("Cannot determine the executable path for autostart.");
             key.SetValue(ValueName, $"\"{exe}\"");
         }
         else

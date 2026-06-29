@@ -128,35 +128,10 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
 
-      # Asset retention on the public releases repo. The release entry and its tag
-      # are always kept (history stays visible on the Releases page); only the
-      # heavy download assets are pruned. Keep assets on the newest release always
-      # and on the 2nd-newest while it is <= 14 days old; strip assets from
-      # everything else (3rd onward, or past the 14-day cap).
+      # Asset retention on the public releases repo (keeps the release entry + tag
+      # for history; strips only the heavy download assets). Shared with the
+      # scheduled prune-releases workflow.
       - name: Prune old release assets (keep 2 newest, 14-day cap)
         env:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
-        run: |
-          REPO=KamilBugaj/ai-usage-app-releases
-          NOW=$(date -u +%s)
-          MAX_AGE=$((14 * 24 * 3600))
-          gh release list --repo "$REPO" --limit 100 \
-            --json tagName,createdAt \
-            --jq 'sort_by(.createdAt) | reverse | to_entries[] | "\(.key) \(.value.tagName) \(.value.createdAt)"' \
-          | while read -r idx tag created; do
-              age=$(( NOW - $(date -u -d "$created" +%s) ))
-              if [ "$idx" -eq 0 ]; then
-                echo "keep assets (latest): $tag"
-              elif [ "$idx" -eq 1 ] && [ "$age" -le "$MAX_AGE" ]; then
-                echo "keep assets (2nd newest, ${age}s old): $tag"
-              else
-                echo "strip assets: $tag (idx=$idx, age=${age}s)"
-                gh release view "$tag" --repo "$REPO" --json assets \
-                  --jq '.assets[].name' \
-                | while read -r asset; do
-                    [ -n "$asset" ] || continue
-                    echo "  delete asset: $asset"
-                    gh release delete-asset "$tag" "$asset" --repo "$REPO" --yes
-                  done
-              fi
-            done
+        run: bash .github/scripts/prune-release-assets.sh

@@ -10,6 +10,10 @@ AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+; Per-user install: no UAC elevation, and {autopf}/{group}/{autodesktop} resolve to
+; per-user locations. This matches the per-user (HKCU) autostart entry below — under
+; an elevated install HKCU would resolve to the elevating admin's hive, not the user's.
+PrivilegesRequired=lowest
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
