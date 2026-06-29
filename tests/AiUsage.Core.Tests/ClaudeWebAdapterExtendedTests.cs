@@ -241,18 +241,39 @@ public class ClaudeWebAdapterExtendedTests
         Assert.Equal(1.0, snaps[0].Utilization, precision: 5);
     }
 
-    // ── ParseSnapshots — percentage normalisation (> 1.0 → ÷ 100) ───────────
-
+    // ── ParseSnapshots — Shape D utilisation is a 0–100 percentage ───────────
+    // Shape D (five_hour/seven_day) always carries utilisation as a percentage and
+    // is divided by 100. The old value-based heuristic (÷100 only when ≥ 2.0)
+    // mis-read low percentages — e.g. raw 1.0 ("1 %") survived undivided and clamped
+    // to a full 1.0 (= 100 %). See ParseSnapshots_ShapeD_LowUtilization_NotInflated.
     [Theory]
-    [InlineData(0.58,  0.58)]   // already 0–1 fraction
-    [InlineData(58.0,  0.58)]   // 0–100 percentage (≥ 2 → ÷ 100)
+    [InlineData(58.0,  0.58)]   // 58 %
     [InlineData(100.0, 1.0)]    // 100 % → 1.0
-    [InlineData(0.0,   0.0)]    // zero
-    [InlineData(1.5,   1.0)]    // slightly over 1.0 → clamp (not treated as %)
+    [InlineData(0.0,   0.0)]    // 0 %
+    [InlineData(1.0,   0.01)]   // 1 %  (regression: was 100 %)
+    [InlineData(150.0, 1.0)]    // over 100 % → clamp to 1.0
     public void ParseSnapshots_UtilizationNormalization(double raw, double expected)
     {
         var u = raw.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var json = $$$"""{"five_hour":{"utilization":{{{u}}},"resets_at":"2030-01-01T00:00:00Z"}}""";
+        var snaps = ClaudeWebAdapter.ParseSnapshots(json);
+        Assert.Single(snaps);
+        Assert.Equal(expected, snaps[0].Utilization, precision: 5);
+    }
+
+    // ── Regression: low utilisation (< 2 %) was inflated to 100 % ────────────
+    // Bug report: when Claude usage is 0–1 % the tile showed 100 %. Values in the
+    // [1.0, 2.0) gap of the old heuristic were never divided and then clamped to 1.0.
+    [Theory]
+    [InlineData(1.0,  0.01)]    // 1 %   → was 100 %
+    [InlineData(0.5,  0.005)]   // 0.5 % → was 50 %
+    [InlineData(1.9,  0.019)]   // just under 2 % → was 100 %
+    [InlineData(2.0,  0.02)]    // 2 %   (boundary)
+    [InlineData(0.0,  0.0)]     // 0 %
+    public void ParseSnapshots_ShapeD_LowUtilization_NotInflated(double raw, double expected)
+    {
+        var u = raw.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var json = $$$"""{"seven_day":{"utilization":{{{u}}},"resets_at":"2030-01-01T00:00:00Z"}}""";
         var snaps = ClaudeWebAdapter.ParseSnapshots(json);
         Assert.Single(snaps);
         Assert.Equal(expected, snaps[0].Utilization, precision: 5);

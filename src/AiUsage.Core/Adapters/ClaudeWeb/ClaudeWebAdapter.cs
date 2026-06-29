@@ -181,10 +181,10 @@ public sealed class ClaudeWebAdapter : ISourceAdapter
             // utilization may be null when limit is active but no usage tracked yet → default 0.
             if (root.TryGetProperty("five_hour", out var fiveHour) &&
                 fiveHour.ValueKind == JsonValueKind.Object)
-                if (TryParseMessageLimit(fiveHour, LimitWindow.Session5h, out var snap, allowNullUtil: true)) result.Add(snap!);
+                if (TryParseMessageLimit(fiveHour, LimitWindow.Session5h, out var snap, allowNullUtil: true, percentScale: true)) result.Add(snap!);
             if (root.TryGetProperty("seven_day", out var sevenDay) &&
                 sevenDay.ValueKind == JsonValueKind.Object)
-                if (TryParseMessageLimit(sevenDay, LimitWindow.Weekly7d, out var snap, allowNullUtil: true)) result.Add(snap!);
+                if (TryParseMessageLimit(sevenDay, LimitWindow.Weekly7d, out var snap, allowNullUtil: true, percentScale: true)) result.Add(snap!);
         }
         catch { }
 
@@ -210,27 +210,30 @@ public sealed class ClaudeWebAdapter : ISourceAdapter
     }
 
     private static bool TryParseMessageLimit(
-        JsonElement el, LimitWindow window, out LimitSnapshot? snap, bool allowNullUtil = false)
+        JsonElement el, LimitWindow window, out LimitSnapshot? snap,
+        bool allowNullUtil = false, bool percentScale = false)
     {
         snap = null;
         double utilization = -1;
 
+        // utilization / percent_full carry the value on either a 0–1 fraction scale
+        // (Shapes A/B/C) or a 0–100 percentage scale (Shape D — the real claude.ai
+        // payload, e.g. "utilization": 58.0). The scale is fixed per shape via
+        // percentScale; guessing it from the value mis-read low percentages such as
+        // 1.0 ("1 %") as a full 1.0 fraction and showed them as 100 %.
         if (el.TryGetProperty("utilization", out var util) && util.TryGetDouble(out var u))
-            utilization = u;
+            utilization = percentScale ? u / 100.0 : u;
         else if (el.TryGetProperty("percent_full", out var pf) && pf.TryGetDouble(out var p))
-            utilization = p;
+            utilization = percentScale ? p / 100.0 : p;
         else if (el.TryGetProperty("messages_used", out var used) && used.TryGetInt64(out var usedV) &&
                  el.TryGetProperty("messages_total", out var total) && total.TryGetInt64(out var totalV) &&
                  totalV > 0)
-            utilization = (double)usedV / totalV;
+            utilization = (double)usedV / totalV; // already a 0–1 fraction
 
         // For Shape D keys (five_hour / seven_day), null utilization means limit exists but
         // no usage tracked yet — treat as 0% rather than skipping the entry entirely.
         if (utilization < 0 && allowNullUtil) utilization = 0;
         if (utilization < 0) return false;
-        // API sometimes returns 0–100 percentage instead of 0–1 fraction.
-        // Threshold ≥ 2 avoids treating "slightly over 1.0" as a percentage.
-        if (utilization >= 2.0) utilization /= 100.0;
         utilization = Math.Clamp(utilization, 0.0, 1.0);
 
         var resetsAt = AiUsage.Core.Adapters.LimitParsing.ReadResetsAt(
