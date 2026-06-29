@@ -13,21 +13,17 @@ Go to [Releases](../../releases/latest) and grab the file for your platform:
 | Platform      | File                                | Notes                  |
 |---------------|-------------------------------------|------------------------|
 | Windows       | `KB.AI.Usage-Setup.exe`             | Installer              |
-| Windows       | `KB.AI.Usage-win-x64.zip`           | Portable (zip)         |
 | macOS (M1+)   | `KB.AI.Usage-osx-arm64.zip`         | Apple Silicon          |
 | macOS (Intel) | `KB.AI.Usage-osx-x64.zip`           | Intel                  |
-| Linux         | `KB.AI.Usage-linux-x64.tar.gz`      | x64                    |
 
 ## Installation
 
 ### Windows
 
-**Installer**: run `KB.AI.Usage-Setup.exe`.
+Run `KB.AI.Usage-Setup.exe`.
 
 SmartScreen may block it (the app is not code-signed):
 click **More info** → **Run anyway**.
-
-**Portable**: unzip and run `AiUsage.App.exe`.
 
 ### macOS
 
@@ -39,17 +35,6 @@ xattr -dr com.apple.quarantine KB.AI.Usage.app
 ```
 
 Alternatively: right-click the `.app` → Open → Open.
-
-### Linux
-
-```bash
-tar xzf KB.AI.Usage-linux-x64.tar.gz
-chmod +x AiUsage.App
-./AiUsage.App
-```
-
-Requires a tray library: `libappindicator3-1`
-(Ubuntu/Debian: `sudo apt install libappindicator3-1`).
 
 ## First launch
 

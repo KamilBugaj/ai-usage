@@ -14,18 +14,20 @@ Matrix: `windows-latest`, `macos-latest`, `ubuntu-latest`. No packaging.
 
 Two stages:
 
-**Job `build`** (4-entry matrix):
+**Job `build`** (3-entry matrix):
 
 | Runner         | RID         | Artifacts                                            |
 |----------------|-------------|------------------------------------------------------|
-| windows-latest | win-x64     | `KB.AI.Usage-win-x64.zip`, `KB.AI.Usage-Setup.exe`  |
+| windows-latest | win-x64     | `KB.AI.Usage-Setup.exe`                              |
 | macos-latest   | osx-arm64   | `KB.AI.Usage-osx-arm64.zip`                          |
 | macos-latest   | osx-x64     | `KB.AI.Usage-osx-x64.zip`                            |
-| ubuntu-latest  | linux-x64   | `KB.AI.Usage-linux-x64.tar.gz`                       |
 
 **Job `publish`** (needs: build):
 - Downloads all artifacts
 - Creates a GitHub Release in the releases repo via `softprops/action-gh-release@v2`
+- Prunes old release *assets* (keeps the release entry + tag for history):
+  keeps assets on the newest always and on the 2nd-newest while ≤14 days old,
+  strips download assets from the rest (`gh release delete-asset`)
 - Token: `RELEASES_REPO_TOKEN` (secret in this source repo)
 
 ## Cross-repo push
@@ -49,12 +51,14 @@ The PAT expires every 90 days — see `docs/release-process.md` → Rotating the
 
 ## Packaging
 
-- **Windows zip**: `Compress-Archive` (PowerShell)
+After publish, a `Strip debug symbols` step deletes `*.pdb` from the publish dir
+(SkiaSharp/HarfBuzz ship ~100 MB of native debug symbols as NuGet content that
+`DebugType=none` does not remove). This is the main artifact-size lever.
+
 - **Windows installer**: Inno Setup (`choco install innosetup` on the runner),
   script at `packaging/windows/installer.iss`, env vars: `APP_VERSION`, `PUBLISH_DIR`, `DIST_DIR`
 - **macOS**: `packaging/macos/make-app.sh` — assembles the `.app` bundle,
   packs with `ditto -c -k --keepParent` (preserves executable bit)
-- **Linux**: `chmod +x` + `tar czf`
 
 ## Triggering
 
