@@ -228,6 +228,12 @@ internal sealed class WebViewSession : IBrowserFetcher, IDisposable
     private static NativeWebDialog CreateDialog(WebViewProviderSpec spec, string title)
     {
         var dialog = new NativeWebDialog { Title = title, Source = spec.Source };
+        // Give the dialog an explicit size. The underlying window's Width/Height stay
+        // double.NaN until Resize() is called; on macOS that NaN flows into the native
+        // -[WKWebView initWithFrame:] call and kills the app with SIGILL
+        // ("Invalid view geometry: y is NaN") the moment the login window is laid out.
+        // Windows/WebView2 tolerates the NaN, so this only crashes on macOS.
+        dialog.Resize(460, 720);
         dialog.EnvironmentRequested += WebView2AppData.Apply;
         return dialog;
     }
