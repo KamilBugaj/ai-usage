@@ -8,7 +8,8 @@ Triggers on every PR and push to `main`. Steps:
 - `dotnet restore` + `dotnet build -c Release`
 - `dotnet test -c Release`
 
-Matrix: `windows-latest`, `macos-latest`, `ubuntu-latest`. No packaging.
+Matrix: `windows-latest`, `macos-latest` (the shipped platforms; Linux is not
+packaged, so it's not built in CI). No packaging.
 
 ### `release.yml` — push of a `v*` tag
 
