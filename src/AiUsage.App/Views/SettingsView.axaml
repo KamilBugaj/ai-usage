@@ -65,6 +65,20 @@
                 </StackPanel>
             </Border>
 
+            <!-- Startup -->
+            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10"
+                    IsVisible="{Binding Settings.AutostartSupported}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Startup" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"/>
+                    <CheckBox IsChecked="{Binding Settings.AutostartEnabled}"
+                              Content="Start with Windows"
+                              Foreground="{DynamicResource TextBrush}" FontSize="12"/>
+                    <TextBlock Text="Launches quietly to the tray when you sign in."
+                               FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                </StackPanel>
+            </Border>
+
             <!-- Tiles manager -->
             <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10">
                 <StackPanel Spacing="8">

@@ -14,16 +14,14 @@
 5. After success, verify the release on the public repo:
    https://github.com/KamilBugaj/ai-usage-app-releases/releases
 
-The full pipeline takes roughly 10–15 minutes (parallel matrix builds on 3 OSes).
+The full pipeline takes roughly 10–15 minutes (parallel matrix builds: Windows + macOS).
 
 ## Verifying the release
 
 Check that the public repo release contains all expected files:
-- `KB.AI.Usage-win-x64.zip`
 - `KB.AI.Usage-Setup.exe`
 - `KB.AI.Usage-osx-arm64.zip`
 - `KB.AI.Usage-osx-x64.zip`
-- `KB.AI.Usage-linux-x64.tar.gz`
 
 ## Local build (without CI)
 

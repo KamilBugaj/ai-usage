@@ -38,8 +38,11 @@ public partial class App : Avalonia.Application
             ThemeService.Apply(cfg.Ui?.Theme);
 
             // Settings connect/disconnect commands fan out to the composer's connectors by key.
+            IAutostartService autostart = OperatingSystem.IsWindows()
+                ? new WindowsAutostartService()
+                : new NoopAutostartService();
             _settings = new SettingsViewModel(
-                ApplySettings, ThemeService.Apply, Connect, Disconnect);
+                ApplySettings, ThemeService.Apply, Connect, Disconnect, autostart);
             _settings.Load(cfg, ClaudeConnected(cfg));
 
             _vm = new MainWindowViewModel(_settings);
