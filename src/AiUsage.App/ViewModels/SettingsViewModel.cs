@@ -178,10 +178,13 @@ public partial class SettingsViewModel : ObservableObject
         try { _autostart.SetEnabled(value); }
         catch
         {
-            // Registry write failed — revert the toggle without re-triggering this handler.
+            // Registry write failed (rare for HKCU): revert the toggle so the UI keeps
+            // reflecting the registry, which is the source of truth. The snap-back is the
+            // user feedback. try/finally guarantees _loading is cleared even if a
+            // PropertyChanged handler on the revert throws.
             _loading = true;
-            AutostartEnabled = !value;
-            _loading = false;
+            try { AutostartEnabled = !value; }
+            finally { _loading = false; }
         }
     }
 
