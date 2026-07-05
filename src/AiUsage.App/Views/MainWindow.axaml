@@ -11,7 +11,7 @@
         x:Class="AiUsage.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="AI Usage"
-        Width="360"
+        Width="{Binding WindowWidth}"
         SizeToContent="Height"
         CanResize="False"
         WindowDecorations="BorderOnly">
@@ -20,11 +20,32 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Panel Background="{DynamicResource BgBrush}">
+    <!-- Margin/Spacing live in styles (not local values) so the ultra class can override. -->
+    <Window.Styles>
+        <Style Selector="StackPanel#DashboardPanel">
+            <Setter Property="Margin" Value="12"/>
+            <Setter Property="Spacing" Value="8"/>
+        </Style>
+        <Style Selector="StackPanel#DashboardPanel.ultra">
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Spacing" Value="3"/>
+        </Style>
+        <Style Selector="StackPanel#DashboardPanel StackPanel.tileHost">
+            <Setter Property="Spacing" Value="8"/>
+        </Style>
+        <Style Selector="StackPanel#DashboardPanel.ultra StackPanel.tileHost">
+            <Setter Property="Spacing" Value="4"/>
+        </Style>
+    </Window.Styles>
+
+    <Panel Background="{DynamicResource BgBrush}" PointerPressed="Root_PointerPressed">
 
         <!-- Dashboard -->
-        <StackPanel Margin="12" Spacing="8" IsVisible="{Binding !ShowSettings}">
-            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,4">
+        <StackPanel x:Name="DashboardPanel" IsVisible="{Binding !ShowSettings}"
+                    Classes.ultra="{Binding IsUltraCompact}">
+            <!-- Header: hidden in ultra-compact (settings + hide live in the tray then) -->
+            <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,4"
+                  IsVisible="{Binding !IsUltraCompact}">
                 <TextBlock Text="AI Usage" FontSize="14" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextBrush}"/>
                 <Button Grid.Column="1" Content="⚙" Background="Transparent"
@@ -40,7 +61,7 @@
             <ItemsControl ItemsSource="{Binding Tiles}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <StackPanel Spacing="8"/>
+                        <StackPanel Classes="tileHost"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.DataTemplates>

@@ -45,7 +45,10 @@ public partial class App : Avalonia.Application
                 ApplySettings, ThemeService.Apply, Connect, Disconnect, autostart);
             _settings.Load(cfg, ClaudeConnected(cfg));
 
-            _vm = new MainWindowViewModel(_settings);
+            _vm = new MainWindowViewModel(_settings)
+            {
+                IsUltraCompact = cfg.Ui?.UltraCompact ?? false
+            };
 
             _window = new MainWindow { DataContext = _vm };
             // Re-anchor to bottom-right whenever content changes window height
@@ -85,6 +88,8 @@ public partial class App : Avalonia.Application
 
         ConfigSaver.Save(AppHost.DefaultConfigPath(), updated);
         ThemeService.Apply(updated.Ui?.Theme);
+        // Before RebuildHost so tiles re-added to the collection pick the flag up on insert.
+        if (_vm is not null) _vm.IsUltraCompact = updated.Ui?.UltraCompact ?? false;
         _composer?.RebuildHost();
 
         // Re-sync the editor (normalised order, etc.).
@@ -99,7 +104,7 @@ public partial class App : Avalonia.Application
     {
         return baseCfg with
         {
-            Ui = new UiConfig(s.CurrentTheme, s.BuildTileConfigs())
+            Ui = new UiConfig(s.CurrentTheme, s.BuildTileConfigs(), s.UltraCompact)
             // ClaudeWeb / ChatGptWeb / Copilot preserved from baseCfg (written by their
             // connect flows).
         };
@@ -157,7 +162,9 @@ public partial class App : Avalonia.Application
             var w = (int)(_window.Width             * scale);
             var h = (int)(_window.ClientSize.Height * scale);
             if (h <= 0) return;
-            _window.Position = new PixelPoint(work.Right - w - 16, work.Bottom - h - 16);
+            // Small DPI-aware gap so the popup hugs the taskbar corner (all modes).
+            var gap = (int)(6 * scale);
+            _window.Position = new PixelPoint(work.Right - w - gap, work.Bottom - h - gap);
         }
         catch { }
     }

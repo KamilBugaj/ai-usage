@@ -62,6 +62,13 @@
                                 Foreground="{DynamicResource SubtextBrush}"
                                 Command="{Binding Settings.ResetAccentCommand}"/>
                     </WrapPanel>
+
+                    <CheckBox IsChecked="{Binding Settings.UltraCompact}"
+                              Content="Ultra compact"
+                              Foreground="{DynamicResource TextBrush}" FontSize="12"/>
+                    <TextBlock Text="Chrome-less mini dashboard: no header, tiny tiles, click the window to hide it. Settings stay in the tray menu."
+                               FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                               TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 
@@ -110,9 +117,10 @@
                                                   Content="{Binding DisplayName}"
                                                   Foreground="{DynamicResource TextBrush}" FontSize="12"/>
 
-                                        <!-- large toggle -->
+                                        <!-- large toggle (moot in ultra-compact: hidden, value preserved) -->
                                         <CheckBox Grid.Column="2" IsChecked="{Binding IsLarge}"
                                                   Content="Large" Margin="6,0"
+                                                  IsVisible="{Binding !((vm:MainWindowViewModel)DataContext).Settings.UltraCompact, ElementName=Root}"
                                                   Foreground="{DynamicResource SubtextBrush}" FontSize="11"/>
 
                                         <!-- alert threshold -->

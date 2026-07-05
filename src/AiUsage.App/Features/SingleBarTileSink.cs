@@ -47,6 +47,7 @@ internal sealed class SingleBarTileSink : IUsageSink
             _tile.IsLoading          = false;
             _tile.HasLimit           = true;
             _tile.Utilization        = s.Utilization;
+            _tile.UtilizationLabel   = $"{pct}%";
             _tile.StatusLine         = $"{_spec.StatusPrefix}: {pct}% used";
             _tile.ResetsAt           = $"resets {resetsIn}";
             _tile.UpdatedAt          = updatedAt;
