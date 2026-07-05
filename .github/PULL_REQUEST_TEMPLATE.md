@@ -6,4 +6,4 @@
 
 - [ ] `dotnet build KB.AI.Usage.slnx -c Release` passes
 - [ ] `dotnet test KB.AI.Usage.slnx` passes
-- [ ] Docs updated if behaviour changed (README / ARCHITECTURE.md)
+- [ ] Docs updated if behavior changed (README / ARCHITECTURE.md)
