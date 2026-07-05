@@ -1,4 +1,4 @@
-# KB.AI.Usage
+# KB.AI.Usage — AI usage & rate-limit tracker for Claude, ChatGPT and Copilot
 
 A system-tray app that tracks your AI tool usage locally. No telemetry, no cloud.
 Monitors rate limits and quotas for **Claude.ai**, **ChatGPT**, and **GitHub Copilot** —
