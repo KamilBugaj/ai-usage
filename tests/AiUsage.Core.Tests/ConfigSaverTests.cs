@@ -108,6 +108,36 @@ public class ConfigSaverTests
         }
     }
 
+    // ── Save (Ui.UltraCompact round-trip) ────────────────────────────────────
+
+    [Fact]
+    public void Save_UiUltraCompactTrue_RoundTrips()
+    {
+        var path = TempPath();
+        try
+        {
+            var config = new AppConfig(Ui: new UiConfig(UltraCompact: true));
+            ConfigSaver.Save(path, config);
+            var loaded = ConfigLoader.Load(path);
+            Assert.True(loaded.Ui?.UltraCompact);
+        }
+        finally { TryDelete(path); }
+    }
+
+    [Fact]
+    public void Save_UiUltraCompactFalse_RoundTrips()
+    {
+        var path = TempPath();
+        try
+        {
+            var config = new AppConfig(Ui: new UiConfig(UltraCompact: false));
+            ConfigSaver.Save(path, config);
+            var loaded = ConfigLoader.Load(path);
+            Assert.False(loaded.Ui?.UltraCompact);
+        }
+        finally { TryDelete(path); }
+    }
+
     private static string TempPath() =>
         Path.Combine(Path.GetTempPath(), $"aiusage_cfg_{Guid.NewGuid():N}.json");
 
