@@ -32,6 +32,11 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _selectedPreset = "Mocha";
     [ObservableProperty] private string? _selectedAccent;
 
+    // Ultra-compact mode (persisted in UiConfig, applied via Apply & save).
+    // While checked, the per-tile Large toggle is hidden — tile sizes are
+    // irrelevant in ultra but stay stored, so unchecking restores them.
+    [ObservableProperty] private bool _ultraCompact;
+
     // --- Tiles ---
     public ObservableCollection<TileSettingRow> TileRows { get; } = [];
 
@@ -117,6 +122,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             SelectedPreset = cfg.Ui?.Theme?.Preset ?? "Mocha";
             SelectedAccent = cfg.Ui?.Theme?.Accent;
+            UltraCompact   = cfg.Ui?.UltraCompact ?? false;
 
             ClaudeConnected     = claudeConnected;
             ChatGptConnected    = !string.IsNullOrWhiteSpace(cfg.ChatGptWeb?.SessionToken);

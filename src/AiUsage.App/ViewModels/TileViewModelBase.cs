@@ -22,6 +22,11 @@ public abstract partial class TileViewModelBase : ObservableObject, IPollStatus
 
     public bool IsLarge => Size == TileSize.Large;
 
+    // Global ultra-compact mode: views swap to a minimal single/dual-row layout.
+    // Set by MainWindowViewModel; overrides the Small/Large distinction visually
+    // (Size is preserved in config so leaving ultra restores it).
+    [ObservableProperty] private bool _isUltraCompact;
+
     // Alert threshold (unit depends on provider: %, $, tokens). null = no alert.
     [ObservableProperty] private double? _alertThreshold;
 

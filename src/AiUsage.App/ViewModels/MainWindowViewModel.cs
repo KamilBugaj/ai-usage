@@ -14,7 +14,18 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<TileViewModelBase> Tiles { get; } = [];
     public SettingsViewModel Settings { get; }
 
-    [ObservableProperty] private bool _showSettings;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowWidth))]
+    private bool _showSettings;
+
+    // Ultra-compact mode: header-less dashboard, minimal tiles, click hides to tray.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowWidth))]
+    private bool _isUltraCompact;
+
+    // Settings always needs the full width; the ultra dashboard is a narrow strip.
+    public double WindowWidth => IsUltraCompact && !ShowSettings ? 240 : 360;
+
     [ObservableProperty] private bool _hasAlerts;
     [ObservableProperty] private string _alertBanner = "";
 
@@ -42,8 +53,17 @@ public partial class MainWindowViewModel : ObservableObject
         if (e.OldItems is not null)
             foreach (TileViewModelBase t in e.OldItems) t.PropertyChanged -= OnTileChanged;
         if (e.NewItems is not null)
-            foreach (TileViewModelBase t in e.NewItems) t.PropertyChanged += OnTileChanged;
+            foreach (TileViewModelBase t in e.NewItems)
+            {
+                t.PropertyChanged += OnTileChanged;
+                t.IsUltraCompact = IsUltraCompact;
+            }
         RefreshAlerts();
+    }
+
+    partial void OnIsUltraCompactChanged(bool value)
+    {
+        foreach (var t in Tiles) t.IsUltraCompact = value;
     }
 
     private void OnTileChanged(object? sender, PropertyChangedEventArgs e)

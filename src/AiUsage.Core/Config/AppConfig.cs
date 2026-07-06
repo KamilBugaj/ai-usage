@@ -46,6 +46,8 @@ public record TileUiConfig(
     TileSize Size = TileSize.Large,
     double? AlertThreshold = null);
 
+// UltraCompact: chrome-less dashboard (no header, click hides to tray) with minimal tiles.
 public record UiConfig(
     ThemeConfig? Theme = null,
-    IReadOnlyList<TileUiConfig>? Tiles = null);
+    IReadOnlyList<TileUiConfig>? Tiles = null,
+    bool UltraCompact = false);

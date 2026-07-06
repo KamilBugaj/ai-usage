@@ -63,6 +63,15 @@ In Settings you can also pick a **theme** (Mocha / Latte / Nord) and accent colo
 **enable/disable** tiles, **drag to reorder** them, switch each tile between **small/large**,
 and set an **alert threshold** (default 80%) that highlights a tile when usage gets close.
 
+**Ultra compact** (Settings → Appearance) shrinks the dashboard to a chrome-less mini
+strip — no header, minimal one-line tiles, and the details (reset times, status) move to
+hover tooltips:
+
+![Ultra compact dashboard](./docs/screenshots/ultra-compact.png)
+
+In this mode a click anywhere on the window hides it back to the tray; reopen it from the
+tray icon and reach Settings from the tray menu, as usual.
+
 Config is stored at `%APPDATA%\AiUsage\config.json` (Windows) or
 `~/.config/AiUsage/config.json` (macOS/Linux), but you normally never need to touch it.
 

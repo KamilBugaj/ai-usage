@@ -45,3 +45,9 @@ In-app Settings panel (same window as the dashboard) covers: themes (Mocha/Latte
 and a mandatory alert threshold (default 80% for the %-based providers). Usage bars are
 tri-coloured (green → yellow near the threshold → red at/over it); time-to-reset shows as
 a filling ring with a hover tooltip.
+
+Ultra compact mode (Appearance checkbox, `UiConfig.UltraCompact`): chrome-less 240 px
+dashboard — no header, minimal single/dual-row tiles (9 px text, 3 px bars, 11 px rings),
+click anywhere hides to tray, details move to hover tooltips. The per-tile Large toggle
+is hidden while active (sizes stay stored). Settings remain reachable from the tray menu
+and always render at full width.

@@ -9,10 +9,26 @@
              x:Class="AiUsage.App.Features.ChatGpt.ChatGptTileView"
              x:DataType="local:ChatGptTileViewModel">
 
-    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10"
+    <!-- Padding/radius live in styles so the ultra class can override them. -->
+    <UserControl.Styles>
+        <Style Selector="Border.tile">
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="Border.tile.ultra">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="tile" Classes.ultra="{Binding IsUltraCompact}"
+            Background="{DynamicResource SurfaceBrush}"
             BorderBrush="{DynamicResource DangerBrush}"
             BorderThickness="{Binding AlertActive, Converter={x:Static conv:BoolToThicknessConverter.Instance}}">
-        <StackPanel Spacing="6">
+        <Panel>
+
+        <!-- ===== Normal (Small/Large) layout ===== -->
+        <StackPanel Spacing="6" IsVisible="{Binding !IsUltraCompact}">
 
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <Viewbox Grid.Column="0" Width="18" Height="18" Margin="0,0,8,0"
@@ -68,5 +84,73 @@
             </StackPanel>
 
         </StackPanel>
+
+        <!-- ===== Ultra-compact layout: one minimal bar row, details on hover ===== -->
+        <StackPanel Spacing="2" IsVisible="{Binding IsUltraCompact}">
+            <ToolTip.Tip>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding StatusLine}"
+                               IsVisible="{Binding StatusLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    <TextBlock Text="{Binding ResetsAt}"
+                               IsVisible="{Binding ResetsAt, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    <TextBlock Text="{Binding UpdatedAt}"
+                               IsVisible="{Binding UpdatedAt, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+            </ToolTip.Tip>
+
+            <TextBlock Text="Loading…" FontSize="9" Foreground="{DynamicResource MutedBrush}"
+                       IsVisible="{Binding IsLoading}"/>
+            <TextBlock Text="{Binding ErrorMessage}" FontSize="9" Foreground="{DynamicResource DangerBrush}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap"/>
+
+            <!-- No bar to show (not connected / needs a paid plan) — surface the status
+                 line instead of leaving the tile blank. -->
+            <TextBlock Text="{Binding StatusLine}" FontSize="9" Foreground="{DynamicResource MutedBrush}"
+                       TextWrapping="Wrap">
+                <TextBlock.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="!IsLoading"/>
+                        <Binding Path="!HasLimit"/>
+                        <Binding Path="ErrorMessage" Converter="{x:Static StringConverters.IsNullOrEmpty}"/>
+                        <Binding Path="StatusLine" Converter="{x:Static StringConverters.IsNotNullOrEmpty}"/>
+                    </MultiBinding>
+                </TextBlock.IsVisible>
+            </TextBlock>
+
+            <!-- [logo] ▓░░ 5% ◔ -->
+            <Grid ColumnDefinitions="16,*,30,Auto">
+                <Grid.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="!IsLoading"/>
+                        <Binding Path="HasLimit"/>
+                    </MultiBinding>
+                </Grid.IsVisible>
+                <Viewbox Grid.Column="0" Width="12" Height="12"
+                         HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <Path Data="{StaticResource ChatGptLogoGeometry}" Fill="{DynamicResource TextBrush}"/>
+                </Viewbox>
+                <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Utilization}"
+                             MinWidth="0" Height="3" CornerRadius="1.5" VerticalAlignment="Center"
+                             Background="{DynamicResource TrackBrush}">
+                    <ProgressBar.Foreground>
+                        <MultiBinding Converter="{x:Static conv:UtilizationToBrushConverter.Instance}">
+                            <Binding Path="Utilization"/>
+                            <Binding Path="AlertThreshold"/>
+                        </MultiBinding>
+                    </ProgressBar.Foreground>
+                </ProgressBar>
+                <TextBlock Grid.Column="2" Text="{Binding UtilizationLabel}" FontSize="9"
+                           Foreground="{DynamicResource SubtextBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                <ctrl:ResetRing Grid.Column="3" Margin="4,0,0,0" VerticalAlignment="Center"
+                                Diameter="11" Thickness="2"
+                                RingBrush="{DynamicResource AccentBrush}"
+                                Fraction="{Binding SessionResetFraction}"/>
+            </Grid>
+        </StackPanel>
+
+        </Panel>
     </Border>
 </UserControl>

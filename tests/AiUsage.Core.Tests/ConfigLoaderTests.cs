@@ -135,6 +135,46 @@ public class ConfigLoaderTests
         finally { File.Delete(path); }
     }
 
+    // ── Ui.UltraCompact ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void Load_NoUiSection_UltraCompactDefaultsFalse()
+    {
+        // Old config.json files predate the field entirely — must not throw and
+        // must default to false (normal dashboard).
+        var path = WriteTempJson("""{"claudeWeb":{"sessionKey":"sk-abc"}}""");
+        try
+        {
+            var cfg = ConfigLoader.Load(path);
+            Assert.False(cfg.Ui?.UltraCompact ?? false);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_UiSectionWithoutUltraCompact_DefaultsFalse()
+    {
+        var path = WriteTempJson("""{"ui":{"theme":{"preset":"Nord"}}}""");
+        try
+        {
+            var cfg = ConfigLoader.Load(path);
+            Assert.False(cfg.Ui?.UltraCompact ?? false);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_UiUltraCompactTrue_DeserializesCorrectly()
+    {
+        var path = WriteTempJson("""{"ui":{"ultraCompact":true}}""");
+        try
+        {
+            var cfg = ConfigLoader.Load(path);
+            Assert.True(cfg.Ui?.UltraCompact);
+        }
+        finally { File.Delete(path); }
+    }
+
     private static string WriteTempJson(string json)
     {
         var path = Path.Combine(Path.GetTempPath(), $"aiusage_cfg_{Guid.NewGuid():N}.json");

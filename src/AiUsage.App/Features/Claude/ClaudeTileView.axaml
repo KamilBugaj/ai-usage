@@ -9,10 +9,26 @@
              x:Class="AiUsage.App.Features.Claude.ClaudeTileView"
              x:DataType="local:ClaudeTileViewModel">
 
-    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="12,10"
+    <!-- Padding/radius live in styles so the ultra class can override them. -->
+    <UserControl.Styles>
+        <Style Selector="Border.tile">
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="Border.tile.ultra">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="CornerRadius" Value="5"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="tile" Classes.ultra="{Binding IsUltraCompact}"
+            Background="{DynamicResource SurfaceBrush}"
             BorderBrush="{DynamicResource DangerBrush}"
             BorderThickness="{Binding AlertActive, Converter={x:Static conv:BoolToThicknessConverter.Instance}}">
-        <StackPanel Spacing="6">
+        <Panel>
+
+        <!-- ===== Normal (Small/Large) layout ===== -->
+        <StackPanel Spacing="6" IsVisible="{Binding !IsUltraCompact}">
 
             <!-- Header: logo + title + alert badge -->
             <Grid ColumnDefinitions="Auto,*,Auto">
@@ -107,5 +123,80 @@
 
             </StackPanel>
         </StackPanel>
+
+        <!-- ===== Ultra-compact layout: two minimal bar rows, details on hover ===== -->
+        <StackPanel Spacing="2" IsVisible="{Binding IsUltraCompact}">
+            <ToolTip.Tip>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding ResetsAt, StringFormat='5h {0}'}"
+                               IsVisible="{Binding HasLimit}"/>
+                    <TextBlock Text="{Binding WeeklyResetsAt, StringFormat='7d {0}'}"
+                               IsVisible="{Binding HasWeeklyLimit}"/>
+                    <TextBlock Text="{Binding UpdatedAt}"
+                               IsVisible="{Binding UpdatedAt, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+            </ToolTip.Tip>
+
+            <TextBlock Text="Loading…" FontSize="9" Foreground="{DynamicResource MutedBrush}"
+                       IsVisible="{Binding IsLoading}"/>
+            <TextBlock Text="{Binding ErrorMessage}" FontSize="9" Foreground="{DynamicResource DangerBrush}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap"/>
+
+            <StackPanel Spacing="2" IsVisible="{Binding !IsLoading}">
+                <!-- [logo] 5h ▓▓▓ 43% ◔ -->
+                <Grid ColumnDefinitions="16,18,*,30,Auto" IsVisible="{Binding HasLimit}">
+                    <Viewbox Grid.Column="0" Width="12" Height="12"
+                             HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Path Data="{StaticResource ClaudeLogoGeometry}" Fill="#D97757"/>
+                    </Viewbox>
+                    <TextBlock Grid.Column="1" Text="5h" FontSize="9"
+                               Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                    <ProgressBar Grid.Column="2" Minimum="0" Maximum="1" Value="{Binding Utilization}"
+                                 MinWidth="0" Height="3" CornerRadius="1.5" VerticalAlignment="Center"
+                                 Background="{DynamicResource TrackBrush}">
+                        <ProgressBar.Foreground>
+                            <MultiBinding Converter="{x:Static conv:UtilizationToBrushConverter.Instance}">
+                                <Binding Path="Utilization"/>
+                                <Binding Path="AlertThreshold"/>
+                            </MultiBinding>
+                        </ProgressBar.Foreground>
+                    </ProgressBar>
+                    <TextBlock Grid.Column="3" Text="{Binding UtilizationLabel}" FontSize="9"
+                               Foreground="{DynamicResource SubtextBrush}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <ctrl:ResetRing Grid.Column="4" Margin="4,0,0,0" VerticalAlignment="Center"
+                                    Diameter="11" Thickness="2"
+                                    RingBrush="{DynamicResource AccentBrush}"
+                                    Fraction="{Binding SessionResetFraction}"/>
+                </Grid>
+
+                <!-- (empty logo cell) 7d ▓▓▓ 31% ◔ -->
+                <Grid ColumnDefinitions="16,18,*,30,Auto" IsVisible="{Binding HasWeeklyLimit}">
+                    <TextBlock Grid.Column="1" Text="7d" FontSize="9"
+                               Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                    <ProgressBar Grid.Column="2" Minimum="0" Maximum="1" Value="{Binding WeeklyUtilization}"
+                                 MinWidth="0" Height="3" CornerRadius="1.5" VerticalAlignment="Center"
+                                 Background="{DynamicResource TrackBrush}">
+                        <ProgressBar.Foreground>
+                            <MultiBinding Converter="{x:Static conv:UtilizationToBrushConverter.Instance}">
+                                <Binding Path="WeeklyUtilization"/>
+                                <Binding Path="AlertThreshold"/>
+                            </MultiBinding>
+                        </ProgressBar.Foreground>
+                    </ProgressBar>
+                    <TextBlock Grid.Column="3" Text="{Binding WeeklyLabel}" FontSize="9"
+                               Foreground="{DynamicResource SubtextBrush}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <ctrl:ResetRing Grid.Column="4" Margin="4,0,0,0" VerticalAlignment="Center"
+                                    Diameter="11" Thickness="2"
+                                    RingBrush="{DynamicResource AccentBrush}"
+                                    Fraction="{Binding WeeklyResetFraction}"/>
+                </Grid>
+            </StackPanel>
+        </StackPanel>
+
+        </Panel>
     </Border>
 </UserControl>
