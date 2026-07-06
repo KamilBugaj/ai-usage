@@ -105,6 +105,20 @@
                        IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        TextWrapping="Wrap"/>
 
+            <!-- No bar to show (not connected / needs a paid plan) — surface the status
+                 line instead of leaving the tile blank. -->
+            <TextBlock Text="{Binding StatusLine}" FontSize="9" Foreground="{DynamicResource MutedBrush}"
+                       TextWrapping="Wrap">
+                <TextBlock.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="!IsLoading"/>
+                        <Binding Path="!HasLimit"/>
+                        <Binding Path="ErrorMessage" Converter="{x:Static StringConverters.IsNullOrEmpty}"/>
+                        <Binding Path="StatusLine" Converter="{x:Static StringConverters.IsNotNullOrEmpty}"/>
+                    </MultiBinding>
+                </TextBlock.IsVisible>
+            </TextBlock>
+
             <!-- [logo] ▓░░ 5% ◔ -->
             <Grid ColumnDefinitions="16,*,30,Auto">
                 <Grid.IsVisible>
