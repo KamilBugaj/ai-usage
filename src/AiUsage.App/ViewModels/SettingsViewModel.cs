@@ -37,6 +37,10 @@ public partial class SettingsViewModel : ObservableObject
     // irrelevant in ultra but stay stored, so unchecking restores them.
     [ObservableProperty] private bool _ultraCompact;
 
+    // Keep the window above other windows. Applied immediately on toggle
+    // (like autostart); persisted in UiConfig via Apply & save.
+    [ObservableProperty] private bool _alwaysOnTop;
+
     // --- Tiles ---
     public ObservableCollection<TileSettingRow> TileRows { get; } = [];
 
@@ -95,20 +99,23 @@ public partial class SettingsViewModel : ObservableObject
     private readonly Action<ThemeConfig> _onPreviewTheme;
     private readonly Action<string> _onConnect;
     private readonly Action<string> _onDisconnect;
+    private readonly Action<bool> _onAlwaysOnTop;
     private readonly IAutostartService _autostart;
     private bool _loading;
 
-    public SettingsViewModel() : this(() => { }, _ => { }, _ => { }, _ => { }, new NoopAutostartService()) { }
+    public SettingsViewModel() : this(() => { }, _ => { }, _ => { }, _ => { }, _ => { }, new NoopAutostartService()) { }
 
     public SettingsViewModel(
         Action onApply, Action<ThemeConfig> onPreviewTheme,
         Action<string> onConnect, Action<string> onDisconnect,
+        Action<bool> onAlwaysOnTop,
         IAutostartService autostart)
     {
         _onApply = onApply;
         _onPreviewTheme = onPreviewTheme;
         _onConnect = onConnect;
         _onDisconnect = onDisconnect;
+        _onAlwaysOnTop = onAlwaysOnTop;
         _autostart = autostart;
     }
 
@@ -123,6 +130,7 @@ public partial class SettingsViewModel : ObservableObject
             SelectedPreset = cfg.Ui?.Theme?.Preset ?? "Mocha";
             SelectedAccent = cfg.Ui?.Theme?.Accent;
             UltraCompact   = cfg.Ui?.UltraCompact ?? false;
+            AlwaysOnTop    = cfg.Ui?.AlwaysOnTop ?? false;
 
             ClaudeConnected     = claudeConnected;
             ChatGptConnected    = !string.IsNullOrWhiteSpace(cfg.ChatGptWeb?.SessionToken);
@@ -177,6 +185,7 @@ public partial class SettingsViewModel : ObservableObject
 
     partial void OnSelectedPresetChanged(string value) { if (!_loading) PreviewTheme(); }
     partial void OnSelectedAccentChanged(string? value) { if (!_loading) PreviewTheme(); }
+    partial void OnAlwaysOnTopChanged(bool value) { if (!_loading) _onAlwaysOnTop(value); }
 
     partial void OnAutostartEnabledChanged(bool value)
     {

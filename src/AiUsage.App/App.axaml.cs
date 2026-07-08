@@ -42,7 +42,9 @@ public partial class App : Avalonia.Application
                 ? new WindowsAutostartService()
                 : new NoopAutostartService();
             _settings = new SettingsViewModel(
-                ApplySettings, ThemeService.Apply, Connect, Disconnect, autostart);
+                ApplySettings, ThemeService.Apply, Connect, Disconnect,
+                v => { if (_window is not null) _window.Topmost = v; },
+                autostart);
             _settings.Load(cfg, ClaudeConnected(cfg));
 
             _vm = new MainWindowViewModel(_settings)
@@ -50,7 +52,11 @@ public partial class App : Avalonia.Application
                 IsUltraCompact = cfg.Ui?.UltraCompact ?? false
             };
 
-            _window = new MainWindow { DataContext = _vm };
+            _window = new MainWindow
+            {
+                DataContext = _vm,
+                Topmost = cfg.Ui?.AlwaysOnTop ?? false
+            };
             // Re-anchor to bottom-right whenever content changes window height
             // (also covers switching between the dashboard and the settings panel).
             _window.SizeChanged += (_, _) =>
@@ -61,6 +67,9 @@ public partial class App : Avalonia.Application
 
             _composer = new AppComposer(_vm, _settings, _dispatcher, AppHost.DefaultConfigPath());
             _composer.RestoreSaved(cfg);
+
+            // A second instance asks us to show the window instead of starting up.
+            SingleInstance.WatchShowRequests(() => Dispatcher.UIThread.Post(ShowWindow));
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -104,7 +113,7 @@ public partial class App : Avalonia.Application
     {
         return baseCfg with
         {
-            Ui = new UiConfig(s.CurrentTheme, s.BuildTileConfigs(), s.UltraCompact)
+            Ui = new UiConfig(s.CurrentTheme, s.BuildTileConfigs(), s.UltraCompact, s.AlwaysOnTop)
             // ClaudeWeb / ChatGptWeb / Copilot preserved from baseCfg (written by their
             // connect flows).
         };
