@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using AiUsage.App.Infrastructure;
 
 namespace AiUsage.App;
 
@@ -10,6 +11,9 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Second instance: hand off to the running one (shows its window) and exit.
+        if (!SingleInstance.TryAcquire()) return;
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

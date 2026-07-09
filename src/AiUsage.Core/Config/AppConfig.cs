@@ -47,7 +47,9 @@ public record TileUiConfig(
     double? AlertThreshold = null);
 
 // UltraCompact: chrome-less dashboard (no header, click hides to tray) with minimal tiles.
+// AlwaysOnTop: keep the window above other windows (Window.Topmost).
 public record UiConfig(
     ThemeConfig? Theme = null,
     IReadOnlyList<TileUiConfig>? Tiles = null,
-    bool UltraCompact = false);
+    bool UltraCompact = false,
+    bool AlwaysOnTop = false);

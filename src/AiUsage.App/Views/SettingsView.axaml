@@ -69,6 +69,13 @@
                     <TextBlock Text="Chrome-less mini dashboard: no header, tiny tiles, click the window to hide it. Settings stay in the tray menu."
                                FontSize="11" Foreground="{DynamicResource MutedBrush}"
                                TextWrapping="Wrap"/>
+
+                    <CheckBox IsChecked="{Binding Settings.AlwaysOnTop}"
+                              Content="Always on top"
+                              Foreground="{DynamicResource TextBrush}" FontSize="12"/>
+                    <TextBlock Text="Keeps the window above other windows."
+                               FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                               TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 

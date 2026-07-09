@@ -138,6 +138,36 @@ public class ConfigSaverTests
         finally { TryDelete(path); }
     }
 
+    // ── Save (Ui.AlwaysOnTop round-trip) ─────────────────────────────────────
+
+    [Fact]
+    public void Save_UiAlwaysOnTopTrue_RoundTrips()
+    {
+        var path = TempPath();
+        try
+        {
+            var config = new AppConfig(Ui: new UiConfig(AlwaysOnTop: true));
+            ConfigSaver.Save(path, config);
+            var loaded = ConfigLoader.Load(path);
+            Assert.True(loaded.Ui?.AlwaysOnTop);
+        }
+        finally { TryDelete(path); }
+    }
+
+    [Fact]
+    public void Save_UiAlwaysOnTopFalse_RoundTrips()
+    {
+        var path = TempPath();
+        try
+        {
+            var config = new AppConfig(Ui: new UiConfig(AlwaysOnTop: false));
+            ConfigSaver.Save(path, config);
+            var loaded = ConfigLoader.Load(path);
+            Assert.False(loaded.Ui?.AlwaysOnTop);
+        }
+        finally { TryDelete(path); }
+    }
+
     private static string TempPath() =>
         Path.Combine(Path.GetTempPath(), $"aiusage_cfg_{Guid.NewGuid():N}.json");
 
