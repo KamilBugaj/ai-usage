@@ -1,11 +1,12 @@
 ## What's new
 
-- **Ultra compact dashboard mode** (Settings → Appearance) — a chrome-less mini
-  strip: no title bar, minimal one-line tiles, details (reset times, status)
-  on hover. Click anywhere on the dashboard to hide it back to the tray;
-  reopen from the tray icon, reach Settings from the tray menu as usual.
-  Normal mode is unchanged; existing settings carry over automatically.
-- The tray popup now sits closer to the taskbar corner (smaller gap, all modes).
+- **Always on top** (Settings → Appearance) — keep the window above other
+  windows, so it no longer disappears behind a maximized or full-screen app.
+  Opt-in, off by default; the toggle applies immediately and is remembered
+  across restarts.
+- **Single instance** — launching the app while it is already running no longer
+  starts a second copy. Instead the existing window pops up near the tray, so
+  there is only ever one tray icon and one set of pollers.
 
 ## Installation
 
