@@ -8,6 +8,9 @@ namespace AiUsage.App.Infrastructure;
 /// the first one (named event) to show its window, then exits. Named mutex/event live in
 /// the session-local namespace, so the guard is scoped per login session. Named events are
 /// Windows-only, so on Unix the second instance just exits silently.
+///
+/// The guard is a convenience: any failure in its machinery fails open (lets the app start)
+/// rather than crashing the process.
 /// </summary>
 public static class SingleInstance
 {
@@ -24,7 +27,17 @@ public static class SingleInstance
     /// </summary>
     public static bool TryAcquire()
     {
-        _mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
+        bool createdNew;
+        try
+        {
+            _mutex = new Mutex(initiallyOwned: true, MutexName, out createdNew);
+        }
+        catch
+        {
+            // Can't establish the guard (name collision, permissions, …) — fail open.
+            return true;
+        }
+
         if (createdNew)
         {
             // Create the show-window event up front, before the (possibly slow) UI
@@ -38,6 +51,8 @@ public static class SingleInstance
             return true;
         }
 
+        // Second instance: signal the running one, then exit. A signalling failure
+        // still exits (avoids a duplicate) — the running window just won't pop up.
         try
         {
             if (OperatingSystem.IsWindows()
@@ -60,7 +75,11 @@ public static class SingleInstance
         if (!OperatingSystem.IsWindows()) return;
 
         // Reuse the handle created in TryAcquire; recreate only if that creation failed.
-        var evt = _showEvent ??= new EventWaitHandle(initialState: false, EventResetMode.AutoReset, ShowEventName);
+        // If even this fails, skip the watcher — the app still runs, just without handoff.
+        EventWaitHandle evt;
+        try { evt = _showEvent ??= new EventWaitHandle(initialState: false, EventResetMode.AutoReset, ShowEventName); }
+        catch { return; }
+
         var thread = new Thread(() =>
         {
             while (true)
