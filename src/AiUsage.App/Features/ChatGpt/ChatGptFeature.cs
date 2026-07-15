@@ -23,11 +23,22 @@ internal sealed class ChatGptFeature : IProviderFeature
             return tile;
         }
 
+        // Show "Loading…" until the first poll resolves. Without this the tile sits blank
+        // through the poll loop's warm-up (it only surfaces an error after 3 failures).
+        tile.IsLoading = true;
         scheduler.Schedule(
             new ChatGptWebAdapter(_fetcher, config.ChatGptWeb),
+            // ChatGPT's window depends on the plan: Plus/Pro report a ~5h primary (+ a weekly
+            // secondary this single-bar tile ignores), while free accounts report a single
+            // ~30d window. The two are mutually exclusive, so accepting both needs no
+            // priority — and dropping either would strand the tile on "Loading…".
             new SingleBarTileSink(tile, new SingleBarTileSpec(
-                ResetFormat.HoursMinutes, "Limit",
-                _ => TimeSpan.FromHours(5), OnlyWindow: LimitWindow.Session5h)),
+                w => w == LimitWindow.Monthly ? ResetFormat.Coarse : ResetFormat.HoursMinutes,
+                "Limit",
+                s => s.Window == LimitWindow.Monthly
+                    ? s.ResetsAt - s.ResetsAt.AddMonths(-1)
+                    : TimeSpan.FromHours(5),
+                AcceptWindows: [LimitWindow.Session5h, LimitWindow.Monthly])),
             tile);
         return tile;
     }

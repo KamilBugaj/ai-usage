@@ -22,9 +22,9 @@ internal sealed class CopilotFeature : IProviderFeature
         scheduler.Schedule(
             new Core.Adapters.Copilot.CopilotApiAdapter(cfg),
             new SingleBarTileSink(tile, new SingleBarTileSpec(
-                ResetFormat.Coarse, "Premium",
+                _ => ResetFormat.Coarse, "Premium",
                 // Monthly window — infer the actual month length from the reset timestamp.
-                r => r - r.AddMonths(-1))),
+                s => s.ResetsAt - s.ResetsAt.AddMonths(-1))),
             tile);
         return tile;
     }

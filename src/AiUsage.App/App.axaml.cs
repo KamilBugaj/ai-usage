@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -51,6 +52,14 @@ public partial class App : Avalonia.Application
             {
                 IsUltraCompact = cfg.Ui?.UltraCompact ?? false
             };
+
+            // Tray icon mirrors the alert state: tallest bar turns red while any provider
+            // is over its threshold. HasAlerts is already the "any tile alerting" aggregate.
+            _vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(MainWindowViewModel.HasAlerts)) UpdateTrayIcon();
+            };
+            UpdateTrayIcon();
 
             _window = new MainWindow
             {
@@ -120,6 +129,15 @@ public partial class App : Avalonia.Application
     }
 
     // --- Tray ---
+
+    // Repaints the tray icon for the current alert state. The icon declared in App.axaml is
+    // only the design-time/startup placeholder; from here on it's drawn in code.
+    private void UpdateTrayIcon()
+    {
+        var tray = TrayIcon.GetIcons(this)?.FirstOrDefault();
+        if (tray is null) return;
+        tray.Icon = TrayIconRenderer.Get(_vm?.HasAlerts ?? false);
+    }
 
     // Clicking the tray icon toggles the window: show if hidden, hide if already visible.
     private void TrayIcon_Clicked(object? sender, EventArgs e)

@@ -44,6 +44,16 @@ public abstract partial class TileViewModelBase : ObservableObject, IPollStatus
     [ObservableProperty] private double _sessionResetFraction;
     [ObservableProperty] private double _weeklyResetFraction;
 
+    // A valid session with nothing to show (e.g. ChatGPT Business/Enterprise, whose plan
+    // exposes no usage %). Muted status line, no red error, no bar. The view already
+    // renders StatusLine muted when !IsLoading and there's no error/limit.
+    public void SetUnavailable(string reason)
+    {
+        IsLoading = false;
+        ErrorMessage = "";
+        StatusLine = reason;
+    }
+
     public void RecomputeResetFractions()
     {
         SessionResetFraction = Elapsed(SessionResetsAtUtc, SessionWindow);
