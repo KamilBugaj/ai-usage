@@ -113,7 +113,11 @@ internal sealed class WebViewConnector : IProviderConnector
         // the same account and there is no way to switch to a different one.
         var fetcher = Fetcher;
         Fetcher = null;
-        _signOut = SignOutAndDisposeAsync(fetcher);
+        // Chain onto a sign-out that is still running rather than replacing it: a second
+        // Disconnect sees a null Fetcher, so its own task would complete immediately, and
+        // Connect — which only awaits the latest — would start while the earlier cookie
+        // wipe was still in flight, restoring the old account.
+        _signOut = SignOutAndDisposeAsync(_signOut, fetcher);
 
         _clearMarker();
         _setConnected(false);
@@ -121,11 +125,23 @@ internal sealed class WebViewConnector : IProviderConnector
         _onChanged();
     }
 
-    private static async Task SignOutAndDisposeAsync(IBrowserFetcher? fetcher)
+    // Never faults: Connect awaits this, so a failed sign-out or disposal must not leave the
+    // provider permanently unable to log back in.
+    private static async Task SignOutAndDisposeAsync(Task? pending, IBrowserFetcher? fetcher)
     {
-        if (fetcher is Features.WebViewSession session)
-            await session.SignOutAsync();
-        (fetcher as IDisposable)?.Dispose();
+        if (pending is not null)
+        {
+            try { await pending; } catch { }
+        }
+
+        try
+        {
+            if (fetcher is Features.WebViewSession session)
+                await session.SignOutAsync();
+        }
+        catch { }
+
+        try { (fetcher as IDisposable)?.Dispose(); } catch { }
     }
 
     public void Dispose()
