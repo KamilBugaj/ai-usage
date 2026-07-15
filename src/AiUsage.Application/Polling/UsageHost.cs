@@ -39,6 +39,15 @@ public sealed class UsageHost : IPollScheduler, IDisposable
                 wait = interval;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (UsageUnavailableException ex)
+            {
+                // Valid session, but this plan exposes no usage data — an expected state,
+                // not a failure. Show a muted status line, clear the backoff, and keep
+                // polling on the normal interval (the plan could change / gain access).
+                _dispatcher.Post(() => status.SetUnavailable(ex.Message));
+                failures = 0;
+                wait = interval;
+            }
             catch (Exception ex)
             {
                 failures++;
