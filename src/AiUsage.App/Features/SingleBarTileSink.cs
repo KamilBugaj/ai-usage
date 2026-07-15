@@ -11,10 +11,10 @@ namespace AiUsage.App.Features;
 /// time, and (optionally) which limit window to show when the adapter emits several.
 /// </summary>
 internal sealed record SingleBarTileSpec(
-    ResetFormat Format,
+    Func<LimitWindow, ResetFormat> Format,
     string StatusPrefix,
-    Func<DateTimeOffset, TimeSpan> Window,
-    LimitWindow? OnlyWindow = null);
+    Func<LimitSnapshot, TimeSpan> Window,
+    LimitWindow[]? AcceptWindows = null);
 
 /// <summary>
 /// Drives a single-bar tile (ChatGPT, Copilot) from usage snapshots. Replaces the per-provider
@@ -33,14 +33,17 @@ internal sealed class SingleBarTileSink : IUsageSink
 
     public Task EmitAsync(LimitSnapshot s)
     {
-        // Some adapters emit several windows (e.g. ChatGPT 5h + weekly); show only the one
-        // this tile tracks. When OnlyWindow is null, accept whatever the adapter emits.
-        if (_spec.OnlyWindow is { } only && s.Window != only) return Task.CompletedTask;
+        // Some adapters emit several windows; show only the ones this tile tracks. The list
+        // must cover every plan the provider can report — a snapshot that is silently dropped
+        // leaves the tile on "Loading…" forever, because only a real emit clears IsLoading.
+        // When AcceptWindows is null, accept whatever the adapter emits.
+        if (_spec.AcceptWindows is { } accepted && !accepted.Contains(s.Window))
+            return Task.CompletedTask;
 
         var pct       = TileMapping.Percent(s.Utilization);
-        var resetsIn  = TileMapping.ResetsIn(s.ResetsAt, _spec.Format);
+        var resetsIn  = TileMapping.ResetsIn(s.ResetsAt, _spec.Format(s.Window));
         var updatedAt = $"updated {DateTime.Now:HH:mm}";
-        var window    = _spec.Window(s.ResetsAt);
+        var window    = _spec.Window(s);
 
         Dispatcher.UIThread.Post(() =>
         {
