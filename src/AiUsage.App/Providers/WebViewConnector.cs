@@ -25,6 +25,9 @@ internal sealed class WebViewConnector : IProviderConnector
     private readonly Action _onChanged;
 
     private CancellationTokenSource? _cts;
+    // A Disconnect in flight: Connect must wait for the cookie wipe to finish, or the login
+    // window would find the old session still present and sign straight back in.
+    private Task? _signOut;
 
     public string Key { get; }
     public IBrowserFetcher? Fetcher { get; private set; }
@@ -67,6 +70,9 @@ internal sealed class WebViewConnector : IProviderConnector
             _setStatus("");
             void Report(string msg) => Dispatcher.UIThread.Post(() => _setStatus(msg));
 
+            // Let a pending sign-out finish first, so this login starts from a clean profile.
+            if (_signOut is not null) await _signOut;
+
             var session = await _login(owner, ct, Report);
             (Fetcher as IDisposable)?.Dispose();
             Fetcher = session;
@@ -101,13 +107,25 @@ internal sealed class WebViewConnector : IProviderConnector
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
-        (Fetcher as IDisposable)?.Dispose();
+
+        // Sign out before dropping the session: clearing the marker alone leaves the
+        // provider's cookies in the WebView2 profile, so the next Connect silently restores
+        // the same account and there is no way to switch to a different one.
+        var fetcher = Fetcher;
         Fetcher = null;
+        _signOut = SignOutAndDisposeAsync(fetcher);
 
         _clearMarker();
         _setConnected(false);
         _setStatus("");
         _onChanged();
+    }
+
+    private static async Task SignOutAndDisposeAsync(IBrowserFetcher? fetcher)
+    {
+        if (fetcher is Features.WebViewSession session)
+            await session.SignOutAsync();
+        (fetcher as IDisposable)?.Dispose();
     }
 
     public void Dispose()
