@@ -13,12 +13,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Windows ships the native libs beside the exe (selfExtractNative: false) so they
+          # are not re-extracted to %TEMP%\.net on every launch (that dir grew unbounded,
+          # ~18 MB per version, never cleaned). The installer recurses the publish dir, so the
+          # loose DLLs are picked up. macOS keeps them embedded: make-app.sh copies only the
+          # single-file exe into the .app bundle, so its native libs must travel inside it.
+          # trimmed: Windows only. Trimming halves the payload but can break Avalonia/JSON at
+          # runtime in platform-specific ways; it is verified on Windows (the primary target
+          # and the machine that can be tested). macOS stays untrimmed until it can be run-tested.
           - os: windows-latest
             rid: win-x64
+            selfExtractNative: 'false'
+            trimmed: 'true'
           - os: macos-latest
             rid: osx-arm64
+            selfExtractNative: 'true'
+            trimmed: 'false'
           - os: macos-latest
             rid: osx-x64
+            selfExtractNative: 'true'
+            trimmed: 'false'
 
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +53,8 @@ jobs:
           dotnet publish src/AiUsage.App/AiUsage.App.csproj \
             -c Release -r ${{ matrix.rid }} --self-contained true \
             -p:PublishSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
-            -p:PublishTrimmed=false \
+            -p:IncludeNativeLibrariesForSelfExtract=${{ matrix.selfExtractNative }} \
+            -p:PublishTrimmed=${{ matrix.trimmed }} \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             -o publish/${{ matrix.rid }}
 
