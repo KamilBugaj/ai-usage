@@ -163,11 +163,11 @@ internal sealed class WebViewSession : IBrowserFetcher, IDisposable
                     _dialog.WebMessageReceived += handler;
                     // JSON-encode the URL so it becomes a safe JS string literal (quotes,
                     // backslashes etc. can't break out of the fetch() call).
-                    var jsUrl = JsonSerializer.Serialize(url);
+                    var jsUrl = JsonSerializer.Serialize(url, WebViewJsonContext.Default.String);
                     var hdrs = new Dictionary<string, string> { ["accept"] = "application/json" };
                     if (headers is not null)
                         foreach (var kv in headers) hdrs[kv.Key] = kv.Value;
-                    var jsHeaders = JsonSerializer.Serialize(hdrs);
+                    var jsHeaders = JsonSerializer.Serialize(hdrs, WebViewJsonContext.Default.DictionaryStringString);
                     // Deliberately not awaited: InvokeScript can itself stall when the WebView
                     // is mid-navigation, and awaiting it would stall outside the timeout above.
                     // A failed injection is reported through tcs so the wait below ends early.
