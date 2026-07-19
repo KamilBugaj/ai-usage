@@ -1,7 +1,7 @@
-# KB.AI.Usage — AI usage & rate-limit tracker for Claude, ChatGPT and Copilot
+# KB.AI.Usage - AI usage & rate-limit tracker for Claude, ChatGPT and Copilot
 
 A system-tray app that tracks your AI tool usage locally. No telemetry, no cloud.
-Monitors rate limits and quotas for **Claude.ai**, **ChatGPT**, and **GitHub Copilot** —
+Monitors rate limits and quotas for **Claude.ai**, **ChatGPT**, and **GitHub Copilot**:
 connect each from inside the app, no manual token pasting.
 
 ![AI Usage app window showing Claude.ai and usage tiles](./docs/screenshots/app-preview.png)
@@ -46,15 +46,15 @@ then the **⚙ gear** to open Settings.
 
 ### Connecting providers
 
-Everything is done from the in-app **Settings** panel — no config files, no DevTools,
+Everything is done from the in-app **Settings** panel: no config files, no DevTools,
 no token pasting. Each provider has a **Connect** button (and **Disconnect** to revoke):
 
-- **Claude.ai** — Connect opens a login window; sign in once and the app reuses the
+- **Claude.ai**: Connect opens a login window; sign in once and the app reuses the
   session to read your 5h + weekly limits.
-- **ChatGPT** — Connect opens a login window. Note: ChatGPT only exposes usage data on
-  **paid plans** (Plus / Pro / Codex). On a free account the tile says so — there's no
+- **ChatGPT**: Connect opens a login window. Note: ChatGPT only exposes usage data on
+  **paid plans** (Plus / Pro / Codex). On a free account the tile says so; there's no
   quota API to read.
-- **GitHub Copilot** — Connect starts a GitHub **device-flow** sign-in: your browser
+- **GitHub Copilot**: Connect starts a GitHub **device-flow** sign-in: your browser
   opens with a code to authorize. After that the tile shows your premium-request quota.
 
 ### Customising the dashboard
@@ -64,7 +64,7 @@ In Settings you can also pick a **theme** (Mocha / Latte / Nord) and accent colo
 and set an **alert threshold** (default 80%) that highlights a tile when usage gets close.
 
 **Ultra compact** (Settings → Appearance) shrinks the dashboard to a chrome-less mini
-strip — no header, minimal one-line tiles, and the details (reset times, status) move to
+strip: no header, minimal one-line tiles, and the details (reset times, status) move to
 hover tooltips:
 
 ![Ultra compact dashboard](./docs/screenshots/ultra-compact.png)
