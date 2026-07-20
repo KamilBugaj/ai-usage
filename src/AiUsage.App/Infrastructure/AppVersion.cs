@@ -1,4 +1,5 @@
 using System.Reflection;
+using AiUsage.Core.Versioning;
 
 namespace AiUsage.App.Infrastructure;
 
@@ -8,28 +9,19 @@ namespace AiUsage.App.Infrastructure;
 ///
 /// Reads <see cref="AssemblyInformationalVersionAttribute"/>, not AssemblyVersion, because
 /// only the informational one keeps a prerelease suffix ("0.1.0-rc1"); the other two are
-/// four-part numerics that drop it.
+/// four-part numerics that drop it. Formatting of the raw value lives in
+/// <see cref="VersionText"/>, where it is unit tested.
 /// </summary>
 public static class AppVersion
 {
     /// <summary>Version of the running build, e.g. "0.0.10" or "0.0.0-dev".</summary>
-    public static string Current { get; } = Read();
+    public static string Current { get; } = VersionText.Normalize(Read());
 
     /// <summary>True for a local (non-CI) build, which carries the csproj baseline.</summary>
-    public static bool IsDevBuild => Current.StartsWith("0.0.0-dev", StringComparison.Ordinal);
+    public static bool IsDevBuild => VersionText.IsDevBuild(Current);
 
-    private static string Read()
-    {
-        // typeof(...).Assembly rather than GetEntryAssembly(): the latter can be null when
-        // the app is hosted rather than launched directly.
-        var informational = typeof(AppVersion).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-        if (string.IsNullOrWhiteSpace(informational)) return "unknown";
-
-        // SourceLink appends "+<commit sha>" to the informational version. It is build
-        // metadata, not part of the version users should see.
-        var plus = informational.IndexOf('+');
-        return plus >= 0 ? informational[..plus] : informational;
-    }
+    // typeof(...).Assembly rather than GetEntryAssembly(): the latter can be null when
+    // the app is hosted rather than launched directly.
+    private static string? Read() => typeof(AppVersion).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 }
