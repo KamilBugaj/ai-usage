@@ -1,15 +1,14 @@
 ## What's new
 
-- **ChatGPT usage now works on every plan.** The tile used to show nothing or sit
-  stuck on "Loading…" on some accounts. It now reads the right usage window for
-  Free, Plus and Pro, and on Business it shows your monthly credit allowance and
-  how much of it you have spent.
-- **Switching ChatGPT accounts actually works.** Disconnect now signs you out of
-  chatgpt.com before the next Connect, so you can log in with a different account
-  instead of landing back in the previous one.
-- **Tray icon alerts at a glance.** The last bar of the tray icon turns red
-  whenever any limit crosses its alert threshold, so you can spot a warning
-  without opening the window.
+- **A much smaller download.** The Windows installer drops from 33 MB to 14 MB,
+  and the installed app from 100 MB to 40 MB. Same features, less than half the
+  disk space.
+- **No more hidden disk growth.** Every launch used to unpack about 18 MB of
+  support files into a temporary folder that was never cleaned up. Those files
+  now sit next to the app, so nothing accumulates in the background. Leftovers
+  from earlier versions are safe to delete from `%TEMP%\.net`.
+- **You can see which version you are running.** The settings panel now shows the
+  build version at the bottom.
 
 ## Installation
 
