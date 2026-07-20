@@ -5,7 +5,7 @@ Thanks for your interest in KB.AI.Usage.
 ## Reporting bugs and requesting features
 
 Open an [issue](../../issues). For bugs, include your app version, OS, and which
-provider tile is affected — the issue form asks for these.
+provider tile is affected - the issue form asks for these.
 
 ## Development setup
 

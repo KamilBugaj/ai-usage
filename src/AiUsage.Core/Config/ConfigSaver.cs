@@ -4,20 +4,13 @@ namespace AiUsage.Core.Config;
 
 public static class ConfigSaver
 {
-    private static readonly JsonSerializerOptions _opts = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
     /// <summary>Writes the whole config to disk, creating the directory if needed.</summary>
     public static void Save(string path, AppConfig config)
     {
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(dir))
             Directory.CreateDirectory(dir);
-        File.WriteAllText(path, JsonSerializer.Serialize(config, _opts));
+        File.WriteAllText(path, JsonSerializer.Serialize(config, ConfigJsonContext.Default.AppConfig));
     }
 
     // The connect flows below omit PollIntervalMinutes so the record default (1 minute)

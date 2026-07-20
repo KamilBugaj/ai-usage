@@ -43,13 +43,18 @@ See `config/config.example.json` for the expected structure.
 dotnet publish src/AiUsage.App/AiUsage.App.csproj \
   -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:PublishTrimmed=false \
+  -p:IncludeNativeLibrariesForSelfExtract=false \
+  -p:PublishTrimmed=true \
   -p:Version=0.0.0-local \
   -o publish/win-x64
 ```
 
-Replace `-r win-x64` with the target RID (`osx-arm64`, `osx-x64`, `linux-x64`).
+These are the Windows release flags. For macOS/Linux, swap `-r win-x64` for the
+target RID (`osx-arm64`, `osx-x64`, `linux-x64`) **and** use
+`-p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false` - trimming
+is verified only on Windows, and the `.app`/tarball carry the native libs inside
+the single-file exe. CI additionally deletes `*.pdb` from the output before
+packaging (~100 MB of native SkiaSharp/HarfBuzz symbols).
 
 ## Regenerating icon files
 

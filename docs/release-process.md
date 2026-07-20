@@ -25,19 +25,22 @@ Check that the public repo release contains all expected files:
 
 ## Local build (without CI)
 
-Same commands as CI — useful for smoke-testing before pushing a tag:
+Same commands as CI - useful for smoke-testing before pushing a tag:
 
 ```bash
 dotnet publish src/AiUsage.App/AiUsage.App.csproj \
   -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:PublishTrimmed=false \
+  -p:IncludeNativeLibrariesForSelfExtract=false \
+  -p:PublishTrimmed=true \
   -p:Version=0.1.0 \
   -o publish/win-x64
 ```
 
-Replace `-r win-x64` with the target RID. Output lands in `publish/<RID>/`.
+These are the Windows flags. macOS/Linux use
+`-p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false` (see
+`docs/ci-architecture.md` → Publish flags). Replace `-r win-x64` with the target
+RID. Output lands in `publish/<RID>/`.
 
 ## Rotating RELEASES_REPO_TOKEN
 
