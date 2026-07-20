@@ -244,6 +244,11 @@
                     Background="{DynamicResource AccentBrush}"
                     Foreground="{DynamicResource OnAccentBrush}" CornerRadius="6"/>
 
+            <!-- Version footer -->
+            <TextBlock Text="{Binding Settings.VersionLabel}" FontSize="10"
+                       Foreground="{DynamicResource MutedBrush}"
+                       HorizontalAlignment="Center"/>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

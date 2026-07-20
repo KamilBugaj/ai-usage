@@ -81,6 +81,11 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _autostartEnabled;
     public bool AutostartSupported => _autostart.IsSupported;
 
+    // --- About ---
+    // Discreet footer in the settings panel. A local build says so outright instead of
+    // showing "v0.0.0-dev", which would look like a real release.
+    public string VersionLabel => AppVersion.IsDevBuild ? "dev build" : $"v{AppVersion.Current}";
+
     public string ConnectLabel => IsConnecting ? "Connecting…"
         : ClaudeConnected                       ? "Reconnect"
         :                                         "Connect";
