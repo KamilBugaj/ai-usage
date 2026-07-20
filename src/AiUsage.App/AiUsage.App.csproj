@@ -7,6 +7,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- Baseline only. The release workflow overrides it with -p:Version=<tag without v>,
+         so shipped builds carry the real version. A local build stays "0.0.0-dev" rather
+         than the SDK default "1.0.0", which would otherwise read as a release that never
+         existed. -->
+    <Version>0.0.0-dev</Version>
   </PropertyGroup>
 
   <ItemGroup>
