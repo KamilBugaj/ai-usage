@@ -44,13 +44,32 @@ RID. Output lands in `publish/<RID>/`.
 
 ## Rotating RELEASES_REPO_TOKEN
 
-The PAT expires every 90 days.
+Current token: rotated 2026-08-03, **expires 2026-12-31**. Keep that line current
+when rotating (step 3) and read the real date off the token itself at
+https://github.com/settings/tokens?type=beta rather than assuming a fixed lifetime.
+The previous entry claimed a 90-day lifetime for a token that lapsed after 31 days,
+and the resulting outage went unnoticed for a week.
+
+**Symptom of expiry:** the daily `Prune release assets` run goes red with
+`non-200 OK status code: 401 Unauthorized ... "Bad credentials"`. That workflow is
+the early warning, and the only one that fails quietly, so a lapsed token can sit
+unnoticed for weeks. The same secret also gates the README push and
+`action-gh-release` in `release.yml`, so an expired token breaks a release halfway
+through, after the builds have already run.
 
 1. Go to https://github.com/settings/tokens?type=beta
-2. Renew the token (or generate a new one with the same permissions).
-3. Update the secret in the source repo:
-   github.com → ai-usage → Settings → Secrets and variables → Actions →
-   `RELEASES_REPO_TOKEN` → Update secret.
+2. Renew the token, or generate a new one: resource owner `KamilBugaj`, repository
+   access limited to `ai-usage-app-releases`, permission `Contents: Read and write`.
+3. Update the secret, then update the "Current token" line above with the new dates:
+   ```
+   gh secret set RELEASES_REPO_TOKEN --repo KamilBugaj/ai-usage
+   ```
+   (or github.com → ai-usage → Settings → Secrets and variables → Actions →
+   `RELEASES_REPO_TOKEN` → Update secret)
+4. Verify without waiting for the cron:
+   ```
+   gh workflow run prune-releases.yml --repo KamilBugaj/ai-usage
+   ```
 
 ## Rolling back a bad release
 

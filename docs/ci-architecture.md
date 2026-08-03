@@ -40,7 +40,8 @@ fine-grained PAT with `Contents: Read and write` permission scoped to that repo 
 
 Secret: `RELEASES_REPO_TOKEN` in `ai-usage`.
 
-The PAT expires every 90 days - see `docs/release-process.md` → Rotating the token.
+The PAT expires 2026-12-31 - see `docs/release-process.md` → Rotating the token
+for the expiry symptom and the procedure.
 
 ## Publish flags
 
