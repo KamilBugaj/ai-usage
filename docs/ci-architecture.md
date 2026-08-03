@@ -27,8 +27,10 @@ Two stages:
 - Downloads all artifacts
 - Creates a GitHub Release in the releases repo via `softprops/action-gh-release@v2`
 - Prunes old release *assets* (keeps the release entry + tag for history):
-  keeps assets on the newest always and on the 2nd-newest while ≤14 days old,
-  strips download assets from the rest (`gh release delete-asset`)
+  keeps assets on the 5 newest releases **or** anything published within 60 days
+  (a union, so the more generous rule wins), strips download assets from the rest
+  (`gh release delete-asset`). Release assets on a public repo are free; the
+  build artifacts are the metered ones, so they expire after 1 day instead.
 - Token: `RELEASES_REPO_TOKEN` (secret in this source repo)
 
 ## Cross-repo push
@@ -38,7 +40,7 @@ fine-grained PAT with `Contents: Read and write` permission scoped to that repo 
 
 Secret: `RELEASES_REPO_TOKEN` in `ai-usage`.
 
-The PAT expires every 90 days - see `docs/release-process.md` → Rotating the token.
+See `docs/release-process.md` → Rotating the token for the current expiry date, expiry symptoms, and the rotation procedure.
 
 ## Publish flags
 
@@ -79,6 +81,6 @@ Tags containing `-` (e.g. `-beta`, `-rc1`) are automatically marked as pre-relea
 
 ## Secrets
 
-| Secret               | Where set            | Notes                                     |
-|----------------------|----------------------|-------------------------------------------|
-| `RELEASES_REPO_TOKEN`| ai-usage → Settings  | Fine-grained PAT, expires every 90 days   |
+| Secret               | Where set            | Notes                                                         |
+|----------------------|----------------------|---------------------------------------------------------------|
+| `RELEASES_REPO_TOKEN`| ai-usage → Settings  | Fine-grained PAT scoped to the releases repo. Expiry date and rotation: `docs/release-process.md` |
