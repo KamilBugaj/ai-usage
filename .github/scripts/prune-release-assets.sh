@@ -17,13 +17,18 @@ failures=0
 
 # High --limit ceiling so a backlog can never hide old releases from cleanup;
 # retention keeps the active set tiny in practice. Tab-separated to parse safely.
+#
+# Age comes from publishedAt, not createdAt: GitHub derives a release's createdAt
+# from its tag's commit date, so a tag cut well before it ships reads as older than
+# it is and loses assets ahead of the cap. Drafts have a null publishedAt, hence the
+# createdAt fallback.
 releases=$(gh release list --repo "$REPO" --limit 1000 \
-  --json tagName,createdAt \
-  --jq 'sort_by(.createdAt) | reverse | to_entries[] | "\(.key)\t\(.value.tagName)\t\(.value.createdAt)"')
+  --json tagName,createdAt,publishedAt \
+  --jq 'sort_by(.publishedAt // .createdAt) | reverse | to_entries[] | "\(.key)\t\(.value.tagName)\t\(.value.publishedAt // .value.createdAt)"')
 
-while IFS=$'\t' read -r idx tag created; do
+while IFS=$'\t' read -r idx tag published; do
   [ -n "$tag" ] || continue
-  age=$(( NOW - $(date -u -d "$created" +%s) ))
+  age=$(( NOW - $(date -u -d "$published" +%s) ))
   age_days=$(( age / 86400 ))
 
   if [ "$idx" -eq 0 ]; then
