@@ -27,8 +27,10 @@ Two stages:
 - Downloads all artifacts
 - Creates a GitHub Release in the releases repo via `softprops/action-gh-release@v2`
 - Prunes old release *assets* (keeps the release entry + tag for history):
-  keeps assets on the newest always and on the 2nd-newest while ≤14 days old,
-  strips download assets from the rest (`gh release delete-asset`)
+  keeps assets on the 5 newest releases **or** anything published within 60 days
+  (a union, so the more generous rule wins), strips download assets from the rest
+  (`gh release delete-asset`). Release assets on a public repo are free; the
+  build artifacts are the metered ones, so they expire after 1 day instead.
 - Token: `RELEASES_REPO_TOKEN` (secret in this source repo)
 
 ## Cross-repo push

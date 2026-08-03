@@ -85,11 +85,16 @@ jobs:
           chmod +x packaging/macos/make-app.sh
           bash packaging/macos/make-app.sh ${{ matrix.rid }} "${{ steps.version.outputs.VERSION }}"
 
+      # These only hand the build off to the publish job minutes later; the release
+      # assets are the durable copy. The 90-day default kept every build of every
+      # tag alive and, unlike public release assets, artifacts DO count against the
+      # Actions storage quota (19 stale ones had accumulated to ~805 MB).
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.rid }}
           path: dist/
+          retention-days: 1
 
   publish:
     name: Publish Release
@@ -145,7 +150,7 @@ jobs:
       # Asset retention on the public releases repo (keeps the release entry + tag
       # for history; strips only the heavy download assets). Shared with the
       # scheduled prune-releases workflow.
-      - name: Prune old release assets (keep 2 newest, 14-day cap)
+      - name: Prune old release assets (keep 5 newest or 60 days)
         env:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
         run: bash .github/scripts/prune-release-assets.sh

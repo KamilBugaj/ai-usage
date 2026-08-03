@@ -2,7 +2,8 @@ name: Prune release assets
 
 # The release workflow prunes on every publish, but that alone can't enforce the
 # age cap when no new release is cut. This daily run strips assets from releases
-# past the 14-day cap (always keeping the 2 newest) independently of releases.
+# outside the retention window (5 newest, or published within 60 days) independently
+# of releases.
 on:
   schedule:
     - cron: '17 4 * * *' # daily, 04:17 UTC
@@ -15,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prune old release assets (keep 2 newest, 14-day cap)
+      - name: Prune old release assets (keep 5 newest or 60 days)
         env:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
         run: bash .github/scripts/prune-release-assets.sh
