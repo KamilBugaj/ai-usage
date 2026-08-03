@@ -81,6 +81,6 @@ Tags containing `-` (e.g. `-beta`, `-rc1`) are automatically marked as pre-relea
 
 ## Secrets
 
-| Secret               | Where set            | Notes                                     |
-|----------------------|----------------------|-------------------------------------------|
-| `RELEASES_REPO_TOKEN`| ai-usage → Settings  | Fine-grained PAT, expires every 90 days   |
+| Secret               | Where set            | Notes                                                         |
+|----------------------|----------------------|---------------------------------------------------------------|
+| `RELEASES_REPO_TOKEN`| ai-usage → Settings  | Fine-grained PAT scoped to the releases repo. Expiry date and rotation: `docs/release-process.md` |
