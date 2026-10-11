@@ -127,7 +127,7 @@ jobs:
           fi
           cp docs/templates/public-README.md public-repo/README.md
           mkdir -p public-repo/docs/screenshots
-          cp docs/screenshots/app-preview.png public-repo/docs/screenshots/app-preview.png
+          cp docs/screenshots/*.png public-repo/docs/screenshots/
           cd public-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
