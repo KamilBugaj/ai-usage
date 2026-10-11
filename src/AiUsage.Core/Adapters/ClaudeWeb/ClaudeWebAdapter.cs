@@ -45,8 +45,7 @@ public sealed class ClaudeWebAdapter : ISourceAdapter
     {
         var usage = await ResolveAndFetchAsync(ct);
 
-        foreach (var s in usage.Limits)
-            await sink.EmitAsync(s);
+        await sink.EmitLimitsAsync(usage.Limits);
 
         if (_fetchCredits)
         {

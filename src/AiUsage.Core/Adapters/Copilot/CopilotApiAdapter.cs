@@ -54,7 +54,7 @@ public sealed class CopilotApiAdapter : ISourceAdapter
             ?? throw new InvalidOperationException(
                 "GitHub returned no Copilot premium-request quota. Its response format may have changed.");
 
-        await sink.EmitAsync(snap);
+        await sink.EmitLimitsAsync([snap]);
     }
 
     /// <summary>

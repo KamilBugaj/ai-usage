@@ -57,15 +57,18 @@ public sealed class ChatGptWebAdapter : ISourceAdapter
         var windows = ParseSnapshots(await FetchAsync("usage", UsageUrl, headers, ct));
         if (windows.Count > 0)
         {
-            foreach (var s in windows)
-                await sink.EmitAsync(s);
+            await sink.EmitLimitsAsync(windows);
             return;
         }
 
+        // A failed request surfaces like any other: reading it as "no cap" would report a
+        // capped seat as having no usage data whenever the endpoint hiccups.
         if (accountId is not null &&
-            await TryFetchMonthlyCreditsAsync(accountId, headers, ct) is { } credits)
+            ParseMonthlyCredits(
+                await FetchAsync("credits", MonthlyCreditsUrl(accountId), headers, ct),
+                DateTimeOffset.UtcNow) is { } credits)
         {
-            await sink.EmitAsync(credits);
+            await sink.EmitLimitsAsync([credits]);
             return;
         }
 
@@ -93,21 +96,6 @@ public sealed class ChatGptWebAdapter : ISourceAdapter
         }
     }
 
-    // Best-effort: accounts without workspace spend controls have no such resource, which
-    // just means "no credit cap".
-    private async Task<LimitSnapshot?> TryFetchMonthlyCreditsAsync(
-        string accountId, IReadOnlyDictionary<string, string> headers, CancellationToken ct)
-    {
-        try
-        {
-            var json = await _fetcher.FetchJsonAsync(MonthlyCreditsUrl(accountId), ct, headers);
-            return ParseMonthlyCredits(json, DateTimeOffset.UtcNow);
-        }
-        catch (HttpRequestException)
-        {
-            return null;
-        }
-    }
 
     // ── GET /api/auth/session ─────────────────────────────────────────────────
 

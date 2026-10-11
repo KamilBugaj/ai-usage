@@ -50,7 +50,9 @@ Everything is done from the in-app **Settings** panel: no config files, no DevTo
 no token pasting. Each provider has a **Connect** button (and **Disconnect** to revoke):
 
 - **Claude.ai**: Connect opens a login window; sign in once and the app reuses the
-  session to read your 5h + weekly limits.
+  session to read your 5h + weekly limits. Tick **Show usage credits** to also see the
+  credits you purchased on the tile, plus any bonus credits from Anthropic while you have
+  some (off by default).
 - **ChatGPT**: Connect opens a login window. The tile shows the limit your plan reports:
   the 5h window on Plus / Pro, the monthly window on a free account, or the monthly
   credit allowance on a Business seat. If the account reports none, the tile says so.

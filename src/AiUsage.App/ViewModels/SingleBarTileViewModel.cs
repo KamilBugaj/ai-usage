@@ -13,4 +13,15 @@ public partial class SingleBarTileViewModel : TileViewModelBase
     [ObservableProperty] private bool _hasLimit;
     [ObservableProperty] private string _utilizationLabel = "";  // "5%" — ultra-compact bar label
     [ObservableProperty] private string _resetsAt = "";
+
+    protected override void ClearUsage()
+    {
+        base.ClearUsage();
+        HasLimit = false;
+        Utilization = 0;
+        UtilizationLabel = "";
+        ResetsAt = "";
+        SessionResetsAtUtc = null;
+        RecomputeResetFractions();
+    }
 }

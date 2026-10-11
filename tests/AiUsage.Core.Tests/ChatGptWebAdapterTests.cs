@@ -211,6 +211,9 @@ public class ChatGptWebAdapterTests
 
     private static string Session(string? account, string? plan) => $$"""{"accessToken":"{{Jwt(account, plan)}}"}""";
 
+    // Spend-controls body of a seat with no cap configured.
+    private const string NoCap = """{"effective_monthly_limit":null,"current_month_usage":12.5}""";
+
     [Fact]
     public async Task PollOnceAsync_FreeAccount_EmitsItsWindow_ScopedToTheAccount()
     {
@@ -249,8 +252,10 @@ public class ChatGptWebAdapterTests
     [Fact]
     public async Task PollOnceAsync_PaidSeatWithNoWindowAndNoCap_IsUnavailableNotAnError()
     {
-        // No credits route → HTTP 404, i.e. no spend controls on this workspace.
-        var fetcher = new FakeFetcher { [SessionUrl] = Session("acc", "business"), [UsageUrl] = BusinessUsage };
+        var fetcher = new FakeFetcher
+        {
+            [SessionUrl] = Session("acc", "business"), [UsageUrl] = BusinessUsage, [CreditsUrl("acc")] = NoCap,
+        };
 
         var ex = await Assert.ThrowsAsync<UsageUnavailableException>(
             () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
@@ -263,12 +268,27 @@ public class ChatGptWebAdapterTests
     [InlineData(null, "ChatGPT returned no usage data for this account.")]
     public async Task PollOnceAsync_NoDataOnAFreeOrUnknownPlan_IsAnError(string? plan, string expected)
     {
-        var fetcher = new FakeFetcher { [SessionUrl] = Session("acc", plan), [UsageUrl] = BusinessUsage };
+        var fetcher = new FakeFetcher
+        {
+            [SessionUrl] = Session("acc", plan), [UsageUrl] = BusinessUsage, [CreditsUrl("acc")] = NoCap,
+        };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
 
         Assert.Equal(expected, ex.Message);
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_CreditsRequestFails_SurfacesTheErrorInsteadOfReportingNoData()
+    {
+        // Read as "no cap", a hiccup here would tell a capped Business seat it has no usage data.
+        var fetcher = new FakeFetcher { [SessionUrl] = Session("acc", "business"), [UsageUrl] = BusinessUsage };
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(
+            () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
+
+        Assert.Equal("ChatGPT credits request failed: HTTP 404", ex.Message);
     }
 
     [Fact]
@@ -348,6 +368,6 @@ public class ChatGptWebAdapterTests
     private sealed class RecordingSink : IUsageSink
     {
         public List<LimitSnapshot> Limits { get; } = [];
-        public Task EmitAsync(LimitSnapshot s) { Limits.Add(s); return Task.CompletedTask; }
+        public Task EmitLimitsAsync(IReadOnlyList<LimitSnapshot> limits) { Limits.AddRange(limits); return Task.CompletedTask; }
     }
 }

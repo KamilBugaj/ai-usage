@@ -359,6 +359,24 @@ public class ClaudeWebAdapterTests
         Assert.Empty(sink.Limits);
     }
 
+    [Fact]
+    public async Task PollOnceAsync_EmitsTheLimitsAsOneCompleteSetPerPoll()
+    {
+        // The set is what lets the tile drop a window that has gone: here the weekly
+        // limit disappears between two polls (a plan change).
+        var fetcher = new FakeFetcher { [UsageUrl(ChatOrg)] = LiveUsage };
+        var adapter = Adapter(fetcher);
+        var sink = new RecordingSink();
+
+        await adapter.PollOnceAsync(sink, CancellationToken.None);
+        fetcher[UsageUrl(ChatOrg)] = """{"five_hour":{"utilization":10.0,"resets_at":"2030-01-01T00:00:00Z"},"seven_day":null}""";
+        await adapter.PollOnceAsync(sink, CancellationToken.None);
+
+        Assert.Equal(2, sink.LimitSets.Count);
+        Assert.Equal(new[] { LimitWindow.Session5h, LimitWindow.Weekly7d }, sink.LimitSets[0].Select(s => s.Window));
+        Assert.Equal(new[] { LimitWindow.Session5h }, sink.LimitSets[1].Select(s => s.Window));
+    }
+
     // ── PollOnceAsync — credits are opt-in and best-effort ────────────────────
 
     [Fact]
@@ -442,10 +460,11 @@ public class ClaudeWebAdapterTests
 
     private sealed class RecordingSink : IUsageSink
     {
-        public List<LimitSnapshot> Limits { get; } = [];
+        public List<IReadOnlyList<LimitSnapshot>> LimitSets { get; } = [];
+        public List<LimitSnapshot> Limits => [.. LimitSets.SelectMany(s => s)];
         public List<IReadOnlyList<CreditSnapshot>> Credits { get; } = [];
 
-        public Task EmitAsync(LimitSnapshot s) { Limits.Add(s); return Task.CompletedTask; }
+        public Task EmitLimitsAsync(IReadOnlyList<LimitSnapshot> limits) { LimitSets.Add(limits); return Task.CompletedTask; }
         public Task EmitCreditsAsync(IReadOnlyList<CreditSnapshot> credits) { Credits.Add(credits); return Task.CompletedTask; }
     }
 }
