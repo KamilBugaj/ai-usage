@@ -4,30 +4,31 @@ using AiUsage.Core.Models;
 
 namespace AiUsage.Core.Adapters.ChatGptWeb;
 
+/// <summary>
+/// Reads usage from chatgpt.com's own web API through the signed-in browser session
+/// (chatgpt.com sits behind Cloudflare and answers plain HttpClient requests with 403).
+/// The API is internal and undocumented, so each parser targets exactly one shape, pinned
+/// as a fixture in ChatGptWebAdapterTests: bodies captured from live free and Business
+/// accounts, plus the two-window Plus/Pro form as the open-source Codex CLI reads it from
+/// the same endpoint. No alternative field names or endpoints are tried on spec. If a
+/// payload changes, capture the new body and update the parser.
+/// </summary>
 public sealed class ChatGptWebAdapter : ISourceAdapter
 {
-    // Step 1: read the NextAuth session (cookie auth) to get a short-lived accessToken (JWT).
-    //         The session lives at /api/auth/session — NOT /backend-api/auth/session (404).
-    // Step 2: use accessToken as Bearer to call rate_limits.
-    // Both run inside the WebView2 browser context (IBrowserFetcher) — chatgpt.com is
-    // behind Cloudflare and rejects plain HttpClient requests with 403 Forbidden.
+    // NextAuth session (cookie auth). Yields the short-lived access token the API wants.
     private const string SessionUrl = "https://chatgpt.com/api/auth/session";
 
-    // Candidate rate-limit endpoints, tried in order — the path has moved between
-    // ChatGPT backend versions, so fall through on 4xx. /wham/usage is the current one
-    // (polled by the Codex CLI); the others are older fallbacks.
-    private static readonly string[] RateLimitUrls =
-    [
-        "https://chatgpt.com/backend-api/wham/usage",
-        "https://chatgpt.com/backend-api/rate_limits",
-        "https://chatgpt.com/backend-api/conversation/rate_limits",
-    ];
+    // The rate-limit windows of the signed-in account; also what the Codex CLI polls.
+    private const string UsageUrl = "https://chatgpt.com/backend-api/wham/usage";
 
-    // Business/Enterprise seats get no rate-limit window at all — their per-user cap is an
-    // admin-set MONTHLY CREDIT allowance, served from the workspace spend-controls endpoint
-    // (this is what Settings → Usage renders). Account-scoped, hence the id in the path.
+    // Business/Enterprise seats have no rate-limit window. Their cap is an admin-set
+    // monthly credit allowance, the number Settings → Usage renders.
     private static string MonthlyCreditsUrl(string accountId)
         => $"https://chatgpt.com/backend-api/accounts/{accountId}/spend-controls/current-user/monthly-usage";
+
+    // A window's length decides its lane: Plus/Pro report ~5h and ~7d, free accounts ~30d.
+    private const double TenHoursSeconds = 10 * 60 * 60;
+    private const double TwoWeeksSeconds = 14 * 24 * 60 * 60;
 
     private readonly IBrowserFetcher _fetcher;
     private readonly ChatGptWebConfig? _cfg;
@@ -43,155 +44,79 @@ public sealed class ChatGptWebAdapter : ISourceAdapter
 
     public async Task PollOnceAsync(IUsageSink sink, CancellationToken ct)
     {
-        var accessToken = await GetAccessTokenAsync(ct);
+        var accessToken = ParseAccessToken(await FetchAsync("session", SessionUrl, null, ct))
+            ?? throw new InvalidOperationException("ChatGPT session carries no access token. Reconnect ChatGPT in Settings.");
         var (accountId, planType) = ParseAuthClaims(accessToken);
 
-        // wham/usage is account-scoped: the Codex CLI sends ChatGPT-Account-Id so the
-        // request resolves to the right workspace. Without it, accounts with more than
-        // one workspace (e.g. Enterprise + personal) can get an empty or foreign result.
-        // The id lives in the accessToken JWT's OpenAI auth claim. (User-Agent can't be
-        // set here — fetch() forbids it — so we only send the account header.)
+        // The usage endpoints are account-scoped: without ChatGPT-Account-Id an account with
+        // several workspaces (personal + Business) can get another workspace's answer.
         var headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {accessToken}" };
-        if (!string.IsNullOrEmpty(accountId))
+        if (accountId is not null)
             headers["ChatGPT-Account-Id"] = accountId;
 
-        // Try each candidate usage endpoint. Any HTTP failure (404/400 = path moved,
-        // 401/403 = no entitlement, etc.) means "try the next one" — we only care
-        // whether ANY endpoint returns usable data.
-        string? body = null;
-        foreach (var url in RateLimitUrls)
+        var windows = ParseSnapshots(await FetchAsync("usage", UsageUrl, headers, ct));
+        if (windows.Count > 0)
         {
-            try
-            {
-                var candidate = await _fetcher.FetchJsonAsync(url, ct, headers);
-                // A 200 with no parseable limits is the free-account signature — keep
-                // looking in case another endpoint has data, but don't accept it as final.
-                if (ParseSnapshots(candidate).Count > 0)
-                {
-                    body = candidate;
-                    break;
-                }
-            }
-            catch (HttpRequestException) { /* path/auth/shape issue — try the next candidate */ }
+            await sink.EmitLimitsAsync(windows);
+            return;
         }
 
-        if (body is null)
+        // A failed request surfaces like any other: reading it as "no cap" would report a
+        // capped seat as having no usage data whenever the endpoint hiccups.
+        if (accountId is not null &&
+            ParseMonthlyCredits(
+                await FetchAsync("credits", MonthlyCreditsUrl(accountId), headers, ct),
+                DateTimeOffset.UtcNow) is { } credits)
         {
-            // No rate-limit window. On Business/Enterprise that's expected — wham/usage is
-            // the Codex endpoint and answers all-null there — but the seat still has an
-            // admin-set monthly credit cap, which lives on the spend-controls endpoint.
-            if (!string.IsNullOrEmpty(accountId))
-            {
-                var credits = await TryGetMonthlyCreditsAsync(accountId, headers, ct);
-                if (credits is not null)
-                {
-                    await sink.EmitAsync(credits);
-                    return;
-                }
-            }
-
-            // Paid plan, no window and no credit cap (e.g. an unlimited seat): nothing to
-            // show, but not a failure either — report it as an informational tile line.
-            if (!string.IsNullOrEmpty(planType) &&
-                !planType.Contains("free", StringComparison.OrdinalIgnoreCase))
-            {
-                var planLabel = char.ToUpperInvariant(planType[0]) + planType[1..];
-                throw new UsageUnavailableException($"{planLabel} account: no usage data");
-            }
-
-            // No plan claim (or an explicitly free plan): the classic free-tier signature.
-            throw new HttpRequestException(
-                "ChatGPT usage needs a paid plan (Plus / Pro / Codex). "
-                + "Free accounts don't expose usage limits."
-                + (string.IsNullOrEmpty(planType) ? "" : $" (token plan: {planType})"));
+            await sink.EmitLimitsAsync([credits]);
+            return;
         }
 
-        foreach (var s in ParseSnapshots(body))
-            await sink.EmitAsync(s);
+        // Neither a window nor a credit cap. On a paid seat that is a normal state (an
+        // uncapped Business seat), so it is reported as a muted line, not an error.
+        if (planType is not null && !planType.Contains("free", StringComparison.OrdinalIgnoreCase))
+            throw new UsageUnavailableException(
+                $"{char.ToUpperInvariant(planType[0])}{planType[1..]} account: no usage data");
+
+        throw new InvalidOperationException(
+            "ChatGPT returned no usage data for this account."
+            + (planType is null ? "" : $" (plan: {planType})"));
     }
 
-    private async Task<LimitSnapshot?> TryGetMonthlyCreditsAsync(
-        string accountId, Dictionary<string, string> headers, CancellationToken ct)
+    private async Task<string> FetchAsync(
+        string what, string url, IReadOnlyDictionary<string, string>? headers, CancellationToken ct)
     {
         try
         {
-            var json = await _fetcher.FetchJsonAsync(MonthlyCreditsUrl(accountId), ct, headers);
-            return ParseMonthlyCredits(json, DateTimeOffset.UtcNow);
-        }
-        catch (HttpRequestException)
-        {
-            // 404 on plans without workspace spend controls — just means "no credit cap".
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Parses the workspace spend-control response that Settings → Usage renders:
-    /// { "effective_monthly_limit": { "limit": 7500, ... }, "current_month_usage": 1634.88 }.
-    /// Returns null when no cap is configured (an unlimited seat has nothing to plot).
-    /// </summary>
-    public static LimitSnapshot? ParseMonthlyCredits(string json, DateTimeOffset now)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            if (!root.TryGetProperty("effective_monthly_limit", out var lim) ||
-                lim.ValueKind != JsonValueKind.Object) return null;
-            if (!lim.TryGetProperty("limit", out var lp) ||
-                !lp.TryGetDouble(out var limit) || limit <= 0) return null;
-            if (!root.TryGetProperty("current_month_usage", out var up) ||
-                !up.TryGetDouble(out var used)) return null;
-
-            // The allowance renews at the start of the next calendar month (the UI shows it
-            // in local time — "1 Aug 02:00" is midnight UTC on a CEST clock).
-            var resetsAt = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero)
-                .AddMonths(1);
-
-            return new LimitSnapshot(
-                Source.ChatGptWeb, LimitWindow.Monthly,
-                Math.Clamp(used / limit, 0.0, 1.0), resetsAt);
-        }
-        catch { return null; }
-    }
-
-    private async Task<string> GetAccessTokenAsync(CancellationToken ct)
-    {
-        string body;
-        try
-        {
-            body = await _fetcher.FetchJsonAsync(SessionUrl, ct);
+            return await _fetcher.FetchJsonAsync(url, ct, headers);
         }
         catch (HttpRequestException ex)
         {
-            throw new HttpRequestException(
-                $"ChatGPT session request failed ({SessionUrl}): {ex.Message}", ex);
+            throw new HttpRequestException($"ChatGPT {what} request failed: {ex.Message}", ex);
         }
-
-        var token = ParseAccessToken(body);
-        if (token is null) throw new InvalidOperationException("Failed to extract accessToken from ChatGPT session.");
-        return token;
     }
 
+
+    // ── GET /api/auth/session ─────────────────────────────────────────────────
+
+    /// <summary>Reads the access token (a JWT) from { "accessToken": "…", "user": {…} }.</summary>
     public static string? ParseAccessToken(string json)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("accessToken", out var token))
-                return token.GetString();
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                ? ReadString(doc.RootElement, "accessToken")
+                : null;
         }
-        catch { }
-        return null;
+        catch (JsonException) { return null; }
     }
 
     /// <summary>
-    /// Extracts the ChatGPT account id and plan type from an access-token JWT. Both live
-    /// under the "https://api.openai.com/auth" claim (with root-level fallbacks). Returns
-    /// nulls for anything missing or unparseable — the caller then simply omits the
-    /// account-scoping header and falls back to a generic diagnostic.
+    /// Extracts the account id and plan type from the access token's payload, where they
+    /// sit under one namespaced claim:
+    /// { "https://api.openai.com/auth": { "chatgpt_account_id": "…", "chatgpt_plan_type": "business" } }
+    /// Returns nulls for anything missing or unparseable.
     /// </summary>
     public static (string? AccountId, string? PlanType) ParseAuthClaims(string accessToken)
     {
@@ -202,25 +127,14 @@ public sealed class ChatGptWebAdapter : ISourceAdapter
 
             using var doc = JsonDocument.Parse(DecodeBase64Url(parts[1]));
             var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return (null, null);
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("https://api.openai.com/auth", out var auth) ||
+                auth.ValueKind != JsonValueKind.Object) return (null, null);
 
-            string? accountId = null, planType = null;
-            if (root.TryGetProperty("https://api.openai.com/auth", out var auth) &&
-                auth.ValueKind == JsonValueKind.Object)
-            {
-                accountId = ReadString(auth, "chatgpt_account_id");
-                planType = ReadString(auth, "chatgpt_plan_type");
-            }
-            accountId ??= ReadString(root, "chatgpt_account_id");
-            planType ??= ReadString(root, "chatgpt_plan_type");
-            return (accountId, planType);
+            return (ReadString(auth, "chatgpt_account_id"), ReadString(auth, "chatgpt_plan_type"));
         }
-        catch { return (null, null); }
+        catch (Exception ex) when (ex is JsonException or FormatException) { return (null, null); }
     }
-
-    private static string? ReadString(JsonElement el, string name) =>
-        el.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String
-            ? p.GetString() : null;
 
     private static string DecodeBase64Url(string value)
     {
@@ -229,167 +143,104 @@ public sealed class ChatGptWebAdapter : ISourceAdapter
         return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(s));
     }
 
-    // Parses multiple possible shapes of the ChatGPT rate_limits response.
+    // ── GET /backend-api/wham/usage ───────────────────────────────────────────
+
+    /// <summary>
+    /// Parses the rate-limit windows of a wham/usage payload:
+    /// { "plan_type": "free",
+    ///   "rate_limit": { "primary_window": { "used_percent": 5, "limit_window_seconds": 2592000,
+    ///                                       "reset_at": 1786730882 },
+    ///                   "secondary_window": null } }
+    /// Plus/Pro carry a ~5h primary and a ~7d secondary; free accounts one ~30d primary.
+    /// Business seats answer with "rate_limit": null, which yields no window.
+    /// </summary>
     public static IReadOnlyList<LimitSnapshot> ParseSnapshots(string json)
     {
-        var result = new List<LimitSnapshot>();
+        var result = new List<LimitSnapshot>(2);
         try
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("rate_limit", out var rateLimit) ||
+                rateLimit.ValueKind != JsonValueKind.Object) return result;
 
-            // Shape B: flat array [{ "limit": N, "remaining": N, "reset_at": "..." }]
-            if (root.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in root.EnumerateArray())
-                {
-                    if (TryParseModelLimit(item, out var snap))
-                        result.Add(snap!);
-                }
-                if (result.Count > 0) return result;
-            }
-
-            if (root.ValueKind != JsonValueKind.Object) return result;
-
-            // Shape W (/wham/usage). Real payload (Codex CLI backend-client):
-            //   { "rate_limit": { "primary_window": {...}, "secondary_window": {...} } }
-            //   window: { "used_percent": 12.5, "reset_at": <epoch>, "limit_window_seconds": 18000 }
-            // Older/variant shapes use "rate_limits" with "primary"/"secondary" and
-            // "window_minutes"/"resets_in_seconds"; TryParseWindow accepts both.
-            var rlObj = root;
-            if (root.TryGetProperty("rate_limit", out var rl1) && rl1.ValueKind == JsonValueKind.Object)
-                rlObj = rl1;
-            else if (root.TryGetProperty("rate_limits", out var rl2) && rl2.ValueKind == JsonValueKind.Object)
-                rlObj = rl2;
-            if (TryGetWindow(rlObj, out var primary, "primary_window", "primary") &&
-                TryParseWindow(primary, out var pSnap)) result.Add(pSnap!);
-            if (TryGetWindow(rlObj, out var secondary, "secondary_window", "secondary") &&
-                TryParseWindow(secondary, out var sSnap)) result.Add(sSnap!);
-            if (result.Count > 0) return result;
-
-            // Shape A: { "models": { "gpt-4o": { "limit": N, "remaining": N, "reset_at": "..." } } }
-            if (root.TryGetProperty("models", out var models) &&
-                models.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var model in models.EnumerateObject())
-                {
-                    if (TryParseModelLimit(model.Value, out var snap))
-                        result.Add(snap!);
-                }
-                if (result.Count > 0) return result;
-            }
-
-            // Shape C: { "rate_limits": [...] }
-            if (root.TryGetProperty("rate_limits", out var rl) &&
-                rl.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in rl.EnumerateArray())
-                {
-                    if (TryParseModelLimit(item, out var snap))
-                        result.Add(snap!);
-                }
-            }
+            foreach (var key in new[] { "primary_window", "secondary_window" })
+                if (rateLimit.TryGetProperty(key, out var el) && ParseWindow(el) is { } snap)
+                    result.Add(snap);
         }
-        catch { }
+        catch (JsonException) { }
 
         return result;
     }
 
-    // Returns the first present object-valued property among the candidate names.
-    private static bool TryGetWindow(JsonElement obj, out JsonElement window, params string[] names)
+    private static LimitSnapshot? ParseWindow(JsonElement el)
     {
-        foreach (var name in names)
+        if (el.ValueKind != JsonValueKind.Object ||
+            !TryReadNumber(el, "used_percent", out var usedPercent) ||
+            !TryReadNumber(el, "limit_window_seconds", out var windowSeconds) ||
+            // reset_at is absolute epoch seconds. The payload also has reset_after_seconds,
+            // but that mirrors the window length, not the time actually remaining.
+            !TryReadNumber(el, "reset_at", out var resetAt)) return null;
+
+        var window = windowSeconds switch
         {
-            if (obj.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.Object)
-            {
-                window = el;
-                return true;
-            }
-        }
-        window = default;
-        return false;
-    }
-
-    // Parses one /wham/usage window. Accepts the real field names
-    // (used_percent, limit_window_seconds, reset_at) and the older variants
-    // (window_minutes, resets_in_seconds).
-    private static bool TryParseWindow(JsonElement el, out LimitSnapshot? snap)
-    {
-        snap = null;
-        if (el.ValueKind != JsonValueKind.Object) return false;
-        if (!el.TryGetProperty("used_percent", out var up) || !up.TryGetDouble(out var pct))
-            return false;
-
-        var utilization = Math.Clamp(pct / 100.0, 0.0, 1.0);
-
-        // Window length decides the lane. ChatGPT reports different windows per plan:
-        // Plus/Pro get a ~5h primary + ~7d secondary, while free accounts get a single
-        // ~30d window — so anything longer than a couple of weeks is Monthly, not Weekly.
-        long? windowMinutes = null;
-        if (el.TryGetProperty("window_minutes", out var wm) && wm.TryGetInt64(out var mins))
-            windowMinutes = mins;
-        else if (el.TryGetProperty("limit_window_seconds", out var ws) && ws.TryGetInt64(out var secs))
-            windowMinutes = secs / 60;
-
-        var window = windowMinutes switch
-        {
-            > 20160 => LimitWindow.Monthly,   // > 14d
-            > 600 => LimitWindow.Weekly7d,    // > 10h
+            > TwoWeeksSeconds => LimitWindow.Monthly,
+            > TenHoursSeconds => LimitWindow.Weekly7d,
             _ => LimitWindow.Session5h,
         };
 
-        // Prefer a relative countdown (resets_in_seconds); otherwise read an absolute
-        // reset_at (epoch or ISO). ReadResetsAt handles both and falls back to now+window.
-        var fallback = DateTimeOffset.UtcNow.AddHours(window switch
-        {
-            LimitWindow.Monthly => 24 * 30,
-            LimitWindow.Weekly7d => 24 * 7,
-            _ => 5,
-        });
-        // An absolute reset wins when present — it's exact. The relative fields are a
-        // fallback: reset_after_seconds in particular mirrors the window length rather than
-        // the true time remaining, so trusting it would push every reset a full window out.
-        var absolute = AiUsage.Core.Adapters.LimitParsing.ReadResetsAt(
-            el, DateTimeOffset.MinValue, "reset_at", "resets_at", "resetAt");
-
-        DateTimeOffset resetsAt;
-        if (absolute > DateTimeOffset.MinValue)
-            resetsAt = absolute;
-        else if (el.TryGetProperty("resets_in_seconds", out var rs) && rs.TryGetInt64(out var relSecs) && relSecs >= 0)
-            resetsAt = DateTimeOffset.UtcNow.AddSeconds(relSecs);
-        else if (el.TryGetProperty("reset_after_seconds", out var ra) && ra.TryGetInt64(out var afterSecs) && afterSecs >= 0)
-            resetsAt = DateTimeOffset.UtcNow.AddSeconds(afterSecs);
-        else
-            resetsAt = fallback;
-
-        snap = new LimitSnapshot(Source.ChatGptWeb, window, utilization, resetsAt);
-        return true;
+        return new LimitSnapshot(
+            Source.ChatGptWeb, window,
+            Math.Clamp(usedPercent / 100.0, 0.0, 1.0),
+            DateTimeOffset.FromUnixTimeSeconds((long)resetAt));
     }
 
-    private static bool TryParseModelLimit(JsonElement el, out LimitSnapshot? snap)
+    // ── GET /backend-api/accounts/{id}/spend-controls/current-user/monthly-usage ──
+
+    /// <summary>
+    /// Parses a Business seat's monthly credit allowance:
+    /// { "effective_monthly_limit": { "limit": 7500, "enforcement_mode": "HARD_CAP",
+    ///                                "limit_mode": "amount_credits" },
+    ///   "current_month_usage": 1634.88 }
+    /// Returns null when no cap is configured (an unlimited seat has nothing to plot).
+    /// </summary>
+    public static LimitSnapshot? ParseMonthlyCredits(string json, DateTimeOffset now)
     {
-        snap = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("effective_monthly_limit", out var cap) ||
+                cap.ValueKind != JsonValueKind.Object ||
+                !TryReadNumber(cap, "limit", out var limit) || limit <= 0 ||
+                !TryReadNumber(root, "current_month_usage", out var used)) return null;
 
-        long limit = 0, remaining = 0;
-        bool hasLimit = el.TryGetProperty("limit", out var lp) && lp.TryGetInt64(out limit);
-        bool hasRemaining = el.TryGetProperty("remaining", out var rp) && rp.TryGetInt64(out remaining);
+            // The payload carries no reset time: the allowance renews with the calendar
+            // month, which is also how the ChatGPT UI derives the date it shows.
+            var resetsAt = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero)
+                .AddMonths(1);
 
-        double utilization = -1;
+            return new LimitSnapshot(
+                Source.ChatGptWeb, LimitWindow.Monthly,
+                Math.Clamp(used / limit, 0.0, 1.0), resetsAt);
+        }
+        catch (JsonException) { return null; }
+    }
 
-        if (hasLimit && hasRemaining && limit > 0)
-            utilization = 1.0 - (double)remaining / limit;
-        else if (el.TryGetProperty("utilization", out var util) && util.TryGetDouble(out var u))
-            utilization = u;
-        else if (el.TryGetProperty("percent_full", out var pf) && pf.TryGetDouble(out var p))
-            utilization = p;
+    // ── Field readers ─────────────────────────────────────────────────────────
 
-        if (utilization < 0) return false;
-        utilization = Math.Clamp(utilization, 0.0, 1.0);
+    // Empty strings read as absent.
+    private static string? ReadString(JsonElement el, string name)
+        => el.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String &&
+           p.GetString() is { Length: > 0 } s
+            ? s : null;
 
-        var resetsAt = AiUsage.Core.Adapters.LimitParsing.ReadResetsAt(
-            el, DateTimeOffset.UtcNow.AddHours(3), "reset_at", "resets_at", "resetAt", "reset_after");
-
-        snap = new LimitSnapshot(Source.ChatGptWeb, LimitWindow.Session5h, utilization, resetsAt);
-        return true;
+    private static bool TryReadNumber(JsonElement el, string name, out double value)
+    {
+        value = 0;
+        return el.TryGetProperty(name, out var p) &&
+               p.ValueKind == JsonValueKind.Number && p.TryGetDouble(out value);
     }
 }

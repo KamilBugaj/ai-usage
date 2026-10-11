@@ -48,8 +48,11 @@ public record TileUiConfig(
 
 // UltraCompact: chrome-less dashboard (no header, click hides to tray) with minimal tiles.
 // AlwaysOnTop: keep the window above other windows (Window.Topmost).
+// ShowClaudeCredits: show the Claude extra-usage credit balance on the Claude tile. Lives
+//   here rather than in ClaudeWebConfig because that record is cleared on Disconnect.
 public record UiConfig(
     ThemeConfig? Theme = null,
     IReadOnlyList<TileUiConfig>? Tiles = null,
     bool UltraCompact = false,
-    bool AlwaysOnTop = false);
+    bool AlwaysOnTop = false,
+    bool ShowClaudeCredits = false);

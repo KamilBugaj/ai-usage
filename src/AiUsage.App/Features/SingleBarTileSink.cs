@@ -31,14 +31,16 @@ internal sealed class SingleBarTileSink : IUsageSink
         _spec = spec;
     }
 
-    public Task EmitAsync(LimitSnapshot s)
+    public Task EmitLimitsAsync(IReadOnlyList<LimitSnapshot> limits)
     {
-        // Some adapters emit several windows; show only the ones this tile tracks. The list
-        // must cover every plan the provider can report — a snapshot that is silently dropped
+        // Some adapters emit several windows; show the one this tile tracks. AcceptWindows
+        // must cover every plan the provider can report — a poll with no accepted window
         // leaves the tile on "Loading…" forever, because only a real emit clears IsLoading.
-        // When AcceptWindows is null, accept whatever the adapter emits.
-        if (_spec.AcceptWindows is { } accepted && !accepted.Contains(s.Window))
-            return Task.CompletedTask;
+        // When AcceptWindows is null, take whatever the adapter emits.
+        var s = _spec.AcceptWindows is { } accepted
+            ? limits.FirstOrDefault(l => accepted.Contains(l.Window))
+            : limits.FirstOrDefault();
+        if (s is null) return Task.CompletedTask;
 
         var pct       = TileMapping.Percent(s.Utilization);
         var resetsIn  = TileMapping.ResetsIn(s.ResetsAt, _spec.Format(s.Window));

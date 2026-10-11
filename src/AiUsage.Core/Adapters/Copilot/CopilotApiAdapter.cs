@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
 using AiUsage.Core.Config;
@@ -6,10 +7,12 @@ using AiUsage.Core.Models;
 namespace AiUsage.Core.Adapters.Copilot;
 
 /// <summary>
-/// Reads GitHub Copilot quota from the internal usage API used by the editor plugins:
-/// GET https://api.github.com/copilot_internal/user, authorised with the GitHub OAuth
-/// token (obtained via device flow). Reports the premium-interactions window as the
-/// primary limit, falling back to the chat window. Percentages are real (not scraped).
+/// Reads the GitHub Copilot premium-request quota from the internal API the editor
+/// plugins use: GET https://api.github.com/copilot_internal/user, authorised with the
+/// GitHub OAuth token from the device flow. The endpoint is undocumented, so the parser
+/// targets exactly one shape, the body captured from a live Business seat on 2026-10-09
+/// and pinned as a fixture in CopilotApiAdapterTests. If the payload changes, capture the
+/// new body and update the parser.
 /// </summary>
 public sealed class CopilotApiAdapter : ISourceAdapter
 {
@@ -45,16 +48,25 @@ public sealed class CopilotApiAdapter : ISourceAdapter
 
         resp.EnsureSuccessStatusCode();
 
-        var body = await resp.Content.ReadAsStringAsync(ct);
-        var snap = ParseSnapshot(body);
-        if (snap is not null)
-            await sink.EmitAsync(snap);
+        // Throw rather than emit nothing: a poll that silently yields no snapshot leaves
+        // the tile on "Loading…" with no explanation.
+        var snap = ParseSnapshot(await resp.Content.ReadAsStringAsync(ct))
+            ?? throw new InvalidOperationException(
+                "GitHub returned no Copilot premium-request quota. Its response format may have changed.");
+
+        await sink.EmitLimitsAsync([snap]);
     }
 
     /// <summary>
-    /// Parses the copilot_internal/user response into a monthly limit snapshot.
-    /// Prefers premium_interactions, falls back to chat. Returns null when neither
-    /// window carries a usable quota (e.g. token-based-billing placeholders).
+    /// Parses the premium-request quota of a copilot_internal/user payload:
+    /// { "quota_reset_date_utc": "2026-11-01T00:00:00.000Z",
+    ///   "quota_snapshots": {
+    ///     "premium_interactions": { "percent_remaining": 82.0, "unlimited": false,
+    ///                               "entitlement": 15000, "remaining": 12305, … },
+    ///     "chat": { "unlimited": true, … }, "completions": { "unlimited": true, … } } }
+    /// Only premium_interactions is read: chat and completions are unlimited on paid seats
+    /// and the tile is labelled "Premium". An unlimited premium quota reports 0 % used.
+    /// Returns null when the quota or its reset date is missing.
     /// </summary>
     public static LimitSnapshot? ParseSnapshot(string json)
     {
@@ -62,69 +74,32 @@ public sealed class CopilotApiAdapter : ISourceAdapter
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
 
-            if (!root.TryGetProperty("quota_snapshots", out var snaps) ||
-                snaps.ValueKind != JsonValueKind.Object)
+            // The payload also has a date-only quota_reset_date; the _utc field says the
+            // same day without leaving the time zone to the parser.
+            if (!root.TryGetProperty("quota_reset_date_utc", out var reset) ||
+                reset.ValueKind != JsonValueKind.String ||
+                !DateTimeOffset.TryParse(reset.GetString(), CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var resetsAt)) return null;
+
+            if (!root.TryGetProperty("quota_snapshots", out var quotas) ||
+                quotas.ValueKind != JsonValueKind.Object ||
+                !quotas.TryGetProperty("premium_interactions", out var premium) ||
+                premium.ValueKind != JsonValueKind.Object) return null;
+
+            double percentRemaining;
+            if (premium.TryGetProperty("unlimited", out var unlimited) &&
+                unlimited.ValueKind == JsonValueKind.True)
+                percentRemaining = 100;
+            else if (!premium.TryGetProperty("percent_remaining", out var pr) ||
+                     pr.ValueKind != JsonValueKind.Number || !pr.TryGetDouble(out percentRemaining))
                 return null;
 
-            var resetsAt = ParseResetDate(root);
-
-            // premium_interactions first, then chat.
-            if (snaps.TryGetProperty("premium_interactions", out var premium) &&
-                TryWindow(premium, resetsAt, out var pSnap))
-                return pSnap;
-
-            if (snaps.TryGetProperty("chat", out var chat) &&
-                TryWindow(chat, resetsAt, out var cSnap))
-                return cSnap;
+            return new LimitSnapshot(
+                Source.Copilot, LimitWindow.Monthly,
+                Math.Clamp((100.0 - percentRemaining) / 100.0, 0.0, 1.0), resetsAt);
         }
-        catch { }
-        return null;
-    }
-
-    // One quota window: { entitlement, remaining, percent_remaining, unlimited, quota_id }.
-    private static bool TryWindow(JsonElement el, DateTimeOffset resetsAt, out LimitSnapshot? snap)
-    {
-        snap = null;
-        if (el.ValueKind != JsonValueKind.Object) return false;
-
-        var unlimited = el.TryGetProperty("unlimited", out var u) &&
-                        u.ValueKind == JsonValueKind.True;
-        if (unlimited)
-        {
-            snap = new LimitSnapshot(Source.Copilot, LimitWindow.Monthly, 0.0, resetsAt);
-            return true;
-        }
-
-        double? percentRemaining =
-            el.TryGetProperty("percent_remaining", out var pr) && pr.TryGetDouble(out var p) ? p : null;
-
-        // Derive from entitlement/remaining when percent_remaining is absent.
-        if (percentRemaining is null &&
-            el.TryGetProperty("entitlement", out var ent) && ent.TryGetDouble(out var e) && e > 0 &&
-            el.TryGetProperty("remaining", out var rem) && rem.TryGetDouble(out var r))
-            percentRemaining = r / e * 100.0;
-
-        if (percentRemaining is null) return false;
-
-        // Skip zero-entitlement placeholders (Business token-based billing) — no real signal.
-        if (el.TryGetProperty("entitlement", out var ent2) && ent2.TryGetDouble(out var ev) && ev == 0 &&
-            el.TryGetProperty("remaining", out var rem2) && rem2.TryGetDouble(out var rv) && rv == 0)
-            return false;
-
-        var utilization = Math.Clamp((100.0 - percentRemaining.Value) / 100.0, 0.0, 1.0);
-        snap = new LimitSnapshot(Source.Copilot, LimitWindow.Monthly, utilization, resetsAt);
-        return true;
-    }
-
-    private static DateTimeOffset ParseResetDate(JsonElement root)
-    {
-        if (root.TryGetProperty("quota_reset_date", out var d) &&
-            d.ValueKind == JsonValueKind.String &&
-            DateTimeOffset.TryParse(d.GetString(), out var parsed))
-            return parsed;
-        // Fallback: first day of next month.
-        var now = DateTimeOffset.UtcNow;
-        return new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1);
+        catch (JsonException) { return null; }
     }
 }

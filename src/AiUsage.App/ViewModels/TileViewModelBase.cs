@@ -51,8 +51,14 @@ public abstract partial class TileViewModelBase : ObservableObject, IPollStatus
     {
         IsLoading = false;
         ErrorMessage = "";
+        ClearUsage();
         StatusLine = reason;
     }
+
+    // Drops whatever usage the tile was showing. Without this a bar from an earlier poll
+    // outlives its data and, since the views show the status line only when there is no
+    // bar, hides the very message that says the data is gone.
+    protected virtual void ClearUsage() => AlertActive = false;
 
     public void RecomputeResetFractions()
     {
