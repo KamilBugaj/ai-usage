@@ -25,6 +25,13 @@ public static class TileMapping
     public static bool AlertActive(double utilization, double? threshold)
         => threshold is { } t && utilization * 100 >= t;
 
+    /// <summary>"$12.34" for USD, "12.34 EUR" for anything else. Culture-invariant.</summary>
+    public static string Credits(decimal amount, string currency)
+    {
+        var value = amount.ToString("#,0.00", System.Globalization.CultureInfo.InvariantCulture);
+        return currency == "USD" ? $"${value}" : $"{value} {currency}";
+    }
+
     /// <summary>
     /// "in 2h 14m" / "in 3d 4h" / "soon" — a human countdown to <paramref name="resetsAt"/>,
     /// shaped by <paramref name="format"/>. Returns "soon" once the window has elapsed.

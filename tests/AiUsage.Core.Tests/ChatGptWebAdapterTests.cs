@@ -1,265 +1,325 @@
-using System.Threading;
-using System.Threading.Tasks;
 using AiUsage.Core.Adapters.ChatGptWeb;
 using AiUsage.Core.Models;
 
 namespace AiUsage.Core.Tests;
 
+/// <summary>
+/// The fixtures are the contract the adapter is written against. FreeUsage, BusinessUsage
+/// and MonthlyCredits are bodies captured from live accounts (July 2026); PlusUsage is the
+/// two-window form the open-source Codex CLI reads from the same endpoint. When a payload
+/// changes, capture the new body here first, then adjust the parser.
+/// </summary>
 public class ChatGptWebAdapterTests
 {
+    // GET /backend-api/wham/usage — live free account: one ~30d window, no secondary.
+    private const string FreeUsage = """
+        {
+          "plan_type": "free",
+          "rate_limit": {
+            "allowed": true,
+            "primary_window": {
+              "used_percent": 5,
+              "limit_window_seconds": 2592000,
+              "reset_after_seconds": 2592000,
+              "reset_at": 1786730882
+            },
+            "secondary_window": null
+          }
+        }
+        """;
+
+    // GET /backend-api/wham/usage — Plus/Pro: a ~5h primary and a ~7d secondary.
+    private const string PlusUsage = """
+        {
+          "plan_type": "pro",
+          "rate_limit": {
+            "primary_window":   { "used_percent": 15, "reset_at": 1893456000, "limit_window_seconds": 18000 },
+            "secondary_window": { "used_percent": 5,  "reset_at": 1893974400, "limit_window_seconds": 604800 }
+          }
+        }
+        """;
+
+    // GET /backend-api/wham/usage — live Business seat: 200, but every usage field null.
+    private const string BusinessUsage =
+        """{"plan_type":"business","rate_limit":null,"additional_rate_limits":null,"credits":{"has_credits":false}}""";
+
+    // GET …/spend-controls/current-user/monthly-usage — live Business seat, the numbers the
+    // ChatGPT UI renders as "1635 of 7500 credits used, 78% remaining".
+    private const string MonthlyCredits = """
+        {"effective_monthly_limit":{"limit":7500,"enforcement_mode":"HARD_CAP","limit_mode":"amount_credits"},
+         "current_month_usage":1634.8825812339783}
+        """;
+
+    // ── ParseAccessToken (/api/auth/session) ──────────────────────────────────
+
     [Fact]
     public void ParseAccessToken_ExtractsToken()
     {
         var json = """{"accessToken":"eyJhbGci.eyJzdWIi.sig","user":{"id":"user-123"}}""";
-        var token = ChatGptWebAdapter.ParseAccessToken(json);
-        Assert.Equal("eyJhbGci.eyJzdWIi.sig", token);
+        Assert.Equal("eyJhbGci.eyJzdWIi.sig", ChatGptWebAdapter.ParseAccessToken(json));
+    }
+
+    [Theory]
+    [InlineData("{}")]                              // signed out
+    [InlineData("""{"user":{"id":"user-123"}}""")]
+    [InlineData("""{"accessToken":null}""")]
+    [InlineData("""{"accessToken":""}""")]
+    [InlineData("[]")]
+    [InlineData("not json")]
+    public void ParseAccessToken_NoToken_ReturnsNull(string json)
+        => Assert.Null(ChatGptWebAdapter.ParseAccessToken(json));
+
+    // ── ParseAuthClaims (access-token JWT) ────────────────────────────────────
+
+    [Fact]
+    public void ParseAuthClaims_ExtractsAccountIdAndPlan_FromOpenAiAuthClaim()
+    {
+        var (accountId, plan) = ChatGptWebAdapter.ParseAuthClaims(Jwt("acc-xyz", "enterprise"));
+        Assert.Equal("acc-xyz", accountId);
+        Assert.Equal("enterprise", plan);
+    }
+
+    [Theory]
+    [InlineData("""{"sub":"u1"}""")]
+    // Only the namespaced claim is a known location for these.
+    [InlineData("""{"chatgpt_account_id":"acc-root","chatgpt_plan_type":"plus"}""")]
+    [InlineData("""{"https://api.openai.com/auth":"nope"}""")]
+    public void ParseAuthClaims_NoAuthClaim_ReturnsNulls(string payload)
+    {
+        var jwt = $"{B64Url("{\"alg\":\"none\"}")}.{B64Url(payload)}.sig";
+        Assert.Equal((null, null), ChatGptWebAdapter.ParseAuthClaims(jwt));
+    }
+
+    [Theory]
+    [InlineData("not-a-jwt")]
+    [InlineData("a.!!!not-base64!!!.c")]
+    [InlineData("a.bm90IGpzb24.c")] // base64 of "not json"
+    public void ParseAuthClaims_Malformed_ReturnsNulls(string token)
+        => Assert.Equal((null, null), ChatGptWebAdapter.ParseAuthClaims(token));
+
+    // ── ParseSnapshots (/wham/usage) ──────────────────────────────────────────
+
+    [Fact]
+    public void ParseSnapshots_FreeAccount_ThirtyDayWindow_IsMonthly()
+    {
+        // It must map to Monthly: classifying it as Weekly7d once made the tile drop it
+        // (its sink did not accept that window) and hang on "Loading…" forever.
+        var snap = Assert.Single(ChatGptWebAdapter.ParseSnapshots(FreeUsage));
+
+        Assert.Equal(Source.ChatGptWeb, snap.Source);
+        Assert.Equal(LimitWindow.Monthly, snap.Window);
+        Assert.Equal(0.05, snap.Utilization, precision: 5);
+        // reset_at, not now + reset_after_seconds: the latter mirrors the window length.
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1786730882), snap.ResetsAt);
     }
 
     [Fact]
-    public void ParseAccessToken_Missing_ReturnsNull()
+    public void ParseSnapshots_PlusAccount_SessionAndWeeklyWindows()
     {
-        var json = """{"user":{"id":"user-123"}}""";
-        Assert.Null(ChatGptWebAdapter.ParseAccessToken(json));
-    }
-
-    [Fact]
-    public void ParseSnapshots_ShapeA_ModelsObject()
-    {
-        var json = """
-            {
-              "models": {
-                "gpt-4o": { "limit": 80, "remaining": 32, "reset_at": "2030-01-01T12:00:00Z" }
-              }
-            }
-            """;
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-        Assert.Single(snaps);
-        Assert.Equal(0.6, snaps[0].Utilization, precision: 5);
-        Assert.Equal(Source.ChatGptWeb, snaps[0].Source);
-    }
-
-    [Fact]
-    public void ParseSnapshots_ShapeB_Array()
-    {
-        var json = """
-            [
-              { "limit": 40, "remaining": 10, "reset_at": "2030-01-01T12:00:00Z" }
-            ]
-            """;
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-        Assert.Single(snaps);
-        Assert.Equal(0.75, snaps[0].Utilization, precision: 5);
-    }
-
-    [Fact]
-    public void ParseSnapshots_UtilizationClamped()
-    {
-        var json = """{"models": {"gpt-4": {"limit": 10, "remaining": -5, "reset_at": "2030-01-01T00:00:00Z"}}}""";
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-        Assert.Single(snaps);
-        Assert.Equal(1.0, snaps[0].Utilization);
-    }
-
-    [Fact]
-    public void ParseSnapshots_ZeroLimit_Skipped()
-    {
-        var json = """{"models": {"gpt-4": {"limit": 0, "remaining": 0}}}""";
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-        Assert.Empty(snaps);
-    }
-
-    [Fact]
-    public void ParseSnapshots_ShapeW_PrimaryAndSecondary()
-    {
-        // Current /wham/usage payload: rate_limits wrapper with two windows.
-        var json = """
-            {
-              "rate_limits": {
-                "primary":   { "used_percent": 12.5, "window_minutes": 299,   "resets_in_seconds": 3600 },
-                "secondary": { "used_percent": 40.0, "window_minutes": 10080, "resets_in_seconds": 600000 }
-              }
-            }
-            """;
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
+        var snaps = ChatGptWebAdapter.ParseSnapshots(PlusUsage);
 
         Assert.Equal(2, snaps.Count);
-
-        // primary → short (5h session) window
-        Assert.Equal(LimitWindow.Session5h, snaps[0].Window);
-        Assert.Equal(0.125, snaps[0].Utilization, precision: 5);
-        Assert.Equal(Source.ChatGptWeb, snaps[0].Source);
-
-        // secondary → long (weekly) window because window_minutes > 600
-        Assert.Equal(LimitWindow.Weekly7d, snaps[1].Window);
-        Assert.Equal(0.40, snaps[1].Utilization, precision: 5);
-    }
-
-    [Fact]
-    public void ParseSnapshots_ShapeW_RootLevelPrimary_NoWrapper()
-    {
-        // Some responses expose primary/secondary at the root, without rate_limits.
-        var json = """{ "primary": { "used_percent": 80, "window_minutes": 300 } }""";
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-
-        Assert.Single(snaps);
-        Assert.Equal(LimitWindow.Session5h, snaps[0].Window);
-        Assert.Equal(0.80, snaps[0].Utilization, precision: 5);
-    }
-
-    [Fact]
-    public void ParseSnapshots_ShapeW_ResetsInSeconds_SetsFutureReset()
-    {
-        var json = """{ "primary": { "used_percent": 10, "window_minutes": 299, "resets_in_seconds": 3600 } }""";
-        var before = DateTimeOffset.UtcNow;
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-
-        Assert.Single(snaps);
-        // resets_in_seconds = 3600 → reset roughly one hour out (allow for test runtime).
-        var delta = snaps[0].ResetsAt - before;
-        Assert.InRange(delta.TotalSeconds, 3590, 3601);
-    }
-
-    [Fact]
-    public void ParseSnapshots_ShapeW_UtilizationClamped()
-    {
-        var json = """{ "primary": { "used_percent": 130, "window_minutes": 299 } }""";
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-        Assert.Single(snaps);
-        Assert.Equal(1.0, snaps[0].Utilization);
-    }
-
-    [Fact]
-    public void ParseSnapshots_ShapeW_RealWhamUsage_RateLimitWindows()
-    {
-        // Authoritative shape from the Codex CLI backend-client: singular "rate_limit",
-        // "*_window" keys, "limit_window_seconds", and an absolute epoch "reset_at".
-        var reset = DateTimeOffset.UtcNow.AddHours(4).ToUnixTimeSeconds();
-        var weeklyReset = DateTimeOffset.UtcNow.AddDays(3).ToUnixTimeSeconds();
-        var json = $$"""
-            {
-              "plan_type": "pro",
-              "rate_limit": {
-                "primary_window":   { "used_percent": 15, "reset_at": {{reset}},       "limit_window_seconds": 18000 },
-                "secondary_window": { "used_percent": 5,  "reset_at": {{weeklyReset}}, "limit_window_seconds": 604800 }
-              }
-            }
-            """;
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
-
-        Assert.Equal(2, snaps.Count);
-
-        // primary_window: 18000s = 300 min → session (5h) window.
         Assert.Equal(LimitWindow.Session5h, snaps[0].Window);
         Assert.Equal(0.15, snaps[0].Utilization, precision: 5);
-        // reset_at is an absolute epoch, kept as-is (not now + relative).
-        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(reset), snaps[0].ResetsAt);
-
-        // secondary_window: 604800s = 10080 min > 600 → weekly window.
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1893456000), snaps[0].ResetsAt);
         Assert.Equal(LimitWindow.Weekly7d, snaps[1].Window);
         Assert.Equal(0.05, snaps[1].Utilization, precision: 5);
     }
 
     [Fact]
-    public void ParseSnapshots_FreePlan_ThirtyDayWindow_IsMonthly()
-    {
-        // Verbatim shape from a live free account: one ~30d primary window, no secondary.
-        // It must map to Monthly — classifying it as Weekly7d made the ChatGPT tile drop it
-        // (its sink only accepted Session5h) and hang on "Loading…" forever.
-        var json = """
-            {
-              "plan_type": "free",
-              "rate_limit": {
-                "allowed": true,
-                "primary_window": {
-                  "used_percent": 5,
-                  "limit_window_seconds": 2592000,
-                  "reset_after_seconds": 2592000,
-                  "reset_at": 1786730882
-                },
-                "secondary_window": null
-              }
-            }
-            """;
-        var snaps = ChatGptWebAdapter.ParseSnapshots(json);
+    public void ParseSnapshots_BusinessSeat_HasNoWindow()
+        => Assert.Empty(ChatGptWebAdapter.ParseSnapshots(BusinessUsage));
 
-        Assert.Single(snaps);
-        Assert.Equal(LimitWindow.Monthly, snaps[0].Window);
-        Assert.Equal(0.05, snaps[0].Utilization, precision: 5);
-        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1786730882), snaps[0].ResetsAt);
+    [Theory]
+    [InlineData(18000,   LimitWindow.Session5h)]  // 5h
+    [InlineData(36000,   LimitWindow.Session5h)]  // 10h: still a session window
+    [InlineData(36001,   LimitWindow.Weekly7d)]
+    [InlineData(604800,  LimitWindow.Weekly7d)]   // 7d
+    [InlineData(1209600, LimitWindow.Weekly7d)]   // 14d: still weekly
+    [InlineData(1209601, LimitWindow.Monthly)]
+    [InlineData(2592000, LimitWindow.Monthly)]    // 30d
+    public void ParseSnapshots_WindowLength_DecidesTheLane(long seconds, LimitWindow expected)
+    {
+        var json = PrimaryWindow($"\"used_percent\":1,\"limit_window_seconds\":{seconds},\"reset_at\":1893456000");
+        Assert.Equal(expected, Assert.Single(ChatGptWebAdapter.ParseSnapshots(json)).Window);
     }
+
+    [Theory]
+    [InlineData(130, 1.0)]
+    [InlineData(-5,  0.0)]
+    public void ParseSnapshots_Utilization_IsClamped(double usedPercent, double expected)
+    {
+        var json = PrimaryWindow($"\"used_percent\":{usedPercent},\"limit_window_seconds\":18000,\"reset_at\":1893456000");
+        Assert.Equal(expected, Assert.Single(ChatGptWebAdapter.ParseSnapshots(json)).Utilization);
+    }
+
+    [Theory]
+    // A window missing any of its three fields is not a window.
+    [InlineData("""{"rate_limit":{"primary_window":{"limit_window_seconds":18000,"reset_at":1893456000}}}""")]
+    [InlineData("""{"rate_limit":{"primary_window":{"used_percent":10,"reset_at":1893456000}}}""")]
+    [InlineData("""{"rate_limit":{"primary_window":{"used_percent":10,"limit_window_seconds":18000,"reset_after_seconds":3600}}}""")]
+    // Shapes the adapter used to accept on spec. None was ever observed; none is read.
+    [InlineData("""{"rate_limits":{"primary":{"used_percent":12.5,"window_minutes":299,"resets_in_seconds":3600}}}""")]
+    [InlineData("""{"primary":{"used_percent":80,"window_minutes":300}}""")]
+    [InlineData("""{"models":{"gpt-4o":{"limit":80,"remaining":32,"reset_at":"2030-01-01T12:00:00Z"}}}""")]
+    [InlineData("""[{"limit":40,"remaining":10,"reset_at":"2030-01-01T12:00:00Z"}]""")]
+    [InlineData("""{"rate_limits":[{"limit":40,"remaining":10}]}""")]
+    [InlineData("""{"something":"else"}""")]
+    [InlineData("not json")]
+    public void ParseSnapshots_NoKnownWindow_ReturnsEmpty(string json)
+        => Assert.Empty(ChatGptWebAdapter.ParseSnapshots(json));
+
+    // ── ParseMonthlyCredits (spend-controls) ──────────────────────────────────
 
     [Fact]
     public void ParseMonthlyCredits_BusinessSeat_MapsToMonthlyUtilization()
     {
-        // Verbatim body from a live Business seat's spend-controls endpoint — the numbers the
-        // ChatGPT UI renders as "1635 of 7500 credits used, 78% remaining".
-        var json = """
-            {"effective_monthly_limit":{"limit":7500,"enforcement_mode":"HARD_CAP","limit_mode":"amount_credits"},
-             "current_month_usage":1634.8825812339783}
-            """;
         var now = new DateTimeOffset(2026, 7, 15, 18, 0, 0, TimeSpan.Zero);
 
-        var snap = ChatGptWebAdapter.ParseMonthlyCredits(json, now);
+        var snap = ChatGptWebAdapter.ParseMonthlyCredits(MonthlyCredits, now);
 
         Assert.NotNull(snap);
-        Assert.Equal(LimitWindow.Monthly, snap!.Window);
+        Assert.Equal(LimitWindow.Monthly, snap.Window);
         Assert.Equal(0.218, snap.Utilization, precision: 3);
         // Renews at the start of the next calendar month.
         Assert.Equal(new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero), snap.ResetsAt);
     }
 
     [Fact]
-    public void ParseMonthlyCredits_NoLimitConfigured_ReturnsNull()
+    public void ParseMonthlyCredits_December_RollsIntoNextYear()
     {
-        // Unlimited seat: nothing to plot, so the caller falls through to its own message.
-        Assert.Null(ChatGptWebAdapter.ParseMonthlyCredits(
-            """{"effective_monthly_limit":null,"current_month_usage":12.5}""", DateTimeOffset.UtcNow));
-        Assert.Null(ChatGptWebAdapter.ParseMonthlyCredits(
-            """{"effective_monthly_limit":{"limit":0},"current_month_usage":0}""", DateTimeOffset.UtcNow));
-        Assert.Null(ChatGptWebAdapter.ParseMonthlyCredits("not json", DateTimeOffset.UtcNow));
+        var snap = ChatGptWebAdapter.ParseMonthlyCredits(
+            MonthlyCredits, new DateTimeOffset(2026, 12, 31, 23, 0, 0, TimeSpan.Zero));
+        Assert.Equal(new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero), snap!.ResetsAt);
+    }
+
+    [Theory]
+    [InlineData("""{"effective_monthly_limit":null,"current_month_usage":12.5}""")] // unlimited seat
+    [InlineData("""{"effective_monthly_limit":{"limit":0},"current_month_usage":0}""")]
+    [InlineData("""{"effective_monthly_limit":{"limit":7500}}""")]
+    [InlineData("[]")]
+    [InlineData("not json")]
+    public void ParseMonthlyCredits_NoCap_ReturnsNull(string json)
+        => Assert.Null(ChatGptWebAdapter.ParseMonthlyCredits(json, DateTimeOffset.UtcNow));
+
+    // ── PollOnceAsync ─────────────────────────────────────────────────────────
+
+    private const string SessionUrl = "https://chatgpt.com/api/auth/session";
+    private const string UsageUrl = "https://chatgpt.com/backend-api/wham/usage";
+    private static string CreditsUrl(string account)
+        => $"https://chatgpt.com/backend-api/accounts/{account}/spend-controls/current-user/monthly-usage";
+
+    private static string Session(string? account, string? plan) => $$"""{"accessToken":"{{Jwt(account, plan)}}"}""";
+
+    [Fact]
+    public async Task PollOnceAsync_FreeAccount_EmitsItsWindow_ScopedToTheAccount()
+    {
+        var fetcher = new FakeFetcher { [SessionUrl] = Session("acc", "free"), [UsageUrl] = FreeUsage };
+        var sink = new RecordingSink();
+
+        await new ChatGptWebAdapter(fetcher).PollOnceAsync(sink, CancellationToken.None);
+
+        Assert.Equal(LimitWindow.Monthly, Assert.Single(sink.Limits).Window);
+        // One usage endpoint, nothing else: no credits lookup once a window is found.
+        Assert.Equal(new[] { SessionUrl, UsageUrl }, fetcher.Requested);
+        var headers = fetcher.Headers[UsageUrl]!;
+        Assert.Equal($"Bearer {Jwt("acc", "free")}", headers["Authorization"]);
+        Assert.Equal("acc", headers["ChatGPT-Account-Id"]);
     }
 
     [Fact]
-    public void ParseAuthClaims_ExtractsAccountIdAndPlan_FromOpenAiAuthClaim()
+    public async Task PollOnceAsync_BusinessSeat_FallsBackToMonthlyCredits()
     {
-        var payload = """{"https://api.openai.com/auth":{"chatgpt_account_id":"acc-xyz","chatgpt_plan_type":"enterprise"}}""";
-        var jwt = $"{B64Url("{\"alg\":\"none\"}")}.{B64Url(payload)}.sig";
+        var fetcher = new FakeFetcher
+        {
+            [SessionUrl] = Session("acc", "business"),
+            [UsageUrl] = BusinessUsage,
+            [CreditsUrl("acc")] = MonthlyCredits,
+        };
+        var sink = new RecordingSink();
 
-        var (accountId, plan) = ChatGptWebAdapter.ParseAuthClaims(jwt);
+        await new ChatGptWebAdapter(fetcher).PollOnceAsync(sink, CancellationToken.None);
 
-        Assert.Equal("acc-xyz", accountId);
-        Assert.Equal("enterprise", plan);
+        var snap = Assert.Single(sink.Limits);
+        Assert.Equal(LimitWindow.Monthly, snap.Window);
+        Assert.Equal(0.218, snap.Utilization, precision: 3);
+        Assert.Equal("acc", fetcher.Headers[CreditsUrl("acc")]!["ChatGPT-Account-Id"]);
     }
 
     [Fact]
-    public void ParseAuthClaims_RootLevelClaims_Fallback()
+    public async Task PollOnceAsync_PaidSeatWithNoWindowAndNoCap_IsUnavailableNotAnError()
     {
-        var payload = """{"chatgpt_account_id":"acc-root","chatgpt_plan_type":"plus"}""";
-        var jwt = $"{B64Url("{\"alg\":\"none\"}")}.{B64Url(payload)}.sig";
+        // No credits route → HTTP 404, i.e. no spend controls on this workspace.
+        var fetcher = new FakeFetcher { [SessionUrl] = Session("acc", "business"), [UsageUrl] = BusinessUsage };
 
-        var (accountId, plan) = ChatGptWebAdapter.ParseAuthClaims(jwt);
+        var ex = await Assert.ThrowsAsync<UsageUnavailableException>(
+            () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
 
-        Assert.Equal("acc-root", accountId);
-        Assert.Equal("plus", plan);
+        Assert.Equal("Business account: no usage data", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("free", "ChatGPT returned no usage data for this account. (plan: free)")]
+    [InlineData(null, "ChatGPT returned no usage data for this account.")]
+    public async Task PollOnceAsync_NoDataOnAFreeOrUnknownPlan_IsAnError(string? plan, string expected)
+    {
+        var fetcher = new FakeFetcher { [SessionUrl] = Session("acc", plan), [UsageUrl] = BusinessUsage };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
+
+        Assert.Equal(expected, ex.Message);
     }
 
     [Fact]
-    public void ParseAuthClaims_MissingClaim_ReturnsNulls()
+    public async Task PollOnceAsync_NoAccountClaim_SendsNoAccountHeaderAndSkipsCredits()
     {
-        var jwt = $"{B64Url("{\"alg\":\"none\"}")}.{B64Url("{\"sub\":\"u1\"}")}.sig";
+        var fetcher = new FakeFetcher { [SessionUrl] = Session(null, "plus"), [UsageUrl] = BusinessUsage };
 
-        var (accountId, plan) = ChatGptWebAdapter.ParseAuthClaims(jwt);
+        await Assert.ThrowsAsync<UsageUnavailableException>(
+            () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
 
-        Assert.Null(accountId);
-        Assert.Null(plan);
+        Assert.Equal(new[] { SessionUrl, UsageUrl }, fetcher.Requested);
+        Assert.False(fetcher.Headers[UsageUrl]!.ContainsKey("ChatGPT-Account-Id"));
     }
 
     [Fact]
-    public void ParseAuthClaims_Malformed_ReturnsNulls()
+    public async Task PollOnceAsync_UsageRequestFails_SurfacesTheErrorWithoutTryingOtherEndpoints()
     {
-        var (accountId, plan) = ChatGptWebAdapter.ParseAuthClaims("not-a-jwt");
-        Assert.Null(accountId);
-        Assert.Null(plan);
+        var fetcher = new FakeFetcher { [SessionUrl] = Session("acc", "plus") }; // usage → HTTP 404
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(
+            () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
+
+        Assert.Equal("ChatGPT usage request failed: HTTP 404", ex.Message);
+        Assert.Equal(new[] { SessionUrl, UsageUrl }, fetcher.Requested);
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_SignedOutSession_AsksToReconnect()
+    {
+        var fetcher = new FakeFetcher { [SessionUrl] = "{}" };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new ChatGptWebAdapter(fetcher).PollOnceAsync(new RecordingSink(), CancellationToken.None));
+
+        Assert.Contains("Reconnect ChatGPT", ex.Message);
+        Assert.Equal(new[] { SessionUrl }, fetcher.Requested);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string PrimaryWindow(string fields)
+        => "{\"rate_limit\":{\"primary_window\":{" + fields + "}}}";
+
+    // An unsigned access token carrying the OpenAI auth claim; null fields are omitted.
+    private static string Jwt(string? account, string? plan)
+    {
+        var fields = new List<string>();
+        if (account is not null) fields.Add($"\"chatgpt_account_id\":\"{account}\"");
+        if (plan is not null) fields.Add($"\"chatgpt_plan_type\":\"{plan}\"");
+        var payload = "{\"https://api.openai.com/auth\":{" + string.Join(",", fields) + "}}";
+        return $"{B64Url("{\"alg\":\"none\"}")}.{B64Url(payload)}.sig";
     }
 
     // Base64url-encodes a UTF-8 string the way JWT segments are encoded.
@@ -269,46 +329,25 @@ public class ChatGptWebAdapterTests
         return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
-    [Fact]
-    public void ParseSnapshots_UnknownShape_ReturnsEmpty()
+    private sealed class FakeFetcher : Dictionary<string, string>, IBrowserFetcher
     {
-        var snaps = ChatGptWebAdapter.ParseSnapshots("""{"something": "else"}""");
-        Assert.Empty(snaps);
-    }
+        public List<string> Requested { get; } = [];
+        public Dictionary<string, IReadOnlyDictionary<string, string>?> Headers { get; } = [];
 
-    [Fact]
-    public void ParseSnapshots_MalformedJson_ReturnsEmpty()
-    {
-        var snaps = ChatGptWebAdapter.ParseSnapshots("not json");
-        Assert.Empty(snaps);
-    }
-
-    [Fact]
-    public async Task PollOnceAsync_BusinessPlanNullUsage_ThrowsUsageUnavailable()
-    {
-        // Reproduces a live ChatGPT Business account: session yields a valid token whose
-        // JWT plan is "business", and wham/usage answers 200 with every usage field null.
-        var payload = """{"https://api.openai.com/auth":{"chatgpt_account_id":"acc","chatgpt_plan_type":"business"}}""";
-        var jwt = $"{B64Url("{\"alg\":\"none\"}")}.{B64Url(payload)}.sig";
-        var fetcher = new FakeFetcher(
-            session: $$"""{"accessToken":"{{jwt}}"}""",
-            usage: """{"plan_type":"business","rate_limit":null,"additional_rate_limits":null,"credits":{"has_credits":false}}""");
-        var adapter = new ChatGptWebAdapter(fetcher);
-
-        var ex = await Assert.ThrowsAsync<UsageUnavailableException>(
-            () => adapter.PollOnceAsync(new NullSink(), CancellationToken.None));
-        Assert.Equal("Business account: no usage data", ex.Message);
-    }
-
-    private sealed class FakeFetcher(string session, string usage) : IBrowserFetcher
-    {
         public Task<string> FetchJsonAsync(
             string url, CancellationToken ct, IReadOnlyDictionary<string, string>? headers = null)
-            => Task.FromResult(url.Contains("auth/session") ? session : usage);
+        {
+            Requested.Add(url);
+            Headers[url] = headers;
+            return TryGetValue(url, out var body)
+                ? Task.FromResult(body)
+                : Task.FromException<string>(new HttpRequestException("HTTP 404"));
+        }
     }
 
-    private sealed class NullSink : IUsageSink
+    private sealed class RecordingSink : IUsageSink
     {
-        public Task EmitAsync(LimitSnapshot s) => Task.CompletedTask;
+        public List<LimitSnapshot> Limits { get; } = [];
+        public Task EmitAsync(LimitSnapshot s) { Limits.Add(s); return Task.CompletedTask; }
     }
 }

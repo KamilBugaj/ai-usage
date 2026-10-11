@@ -24,7 +24,8 @@ internal sealed class ClaudeFeature : IProviderFeature
         }
 
         var cfg = config.ClaudeWeb; // may be null — adapter handles that
-        scheduler.Schedule(new ClaudeWebAdapter(_fetcher, cfg), new ClaudeTileSink(tile), tile);
+        var adapter = new ClaudeWebAdapter(_fetcher, cfg, config.Ui?.ShowClaudeCredits ?? false);
+        scheduler.Schedule(adapter, new ClaudeTileSink(tile), tile);
         return tile;
     }
 }

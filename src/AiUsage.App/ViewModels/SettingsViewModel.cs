@@ -55,6 +55,10 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private string _claudeStatus = "";
 
+    // Show the extra-usage credit balance on the Claude tile (persisted in UiConfig,
+    // applied via Apply & save). Costs one extra request per poll, hence opt-in.
+    [ObservableProperty] private bool _showClaudeCredits;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConnectChatGptLabel))]
     private bool _chatGptConnected;
@@ -136,6 +140,7 @@ public partial class SettingsViewModel : ObservableObject
             SelectedAccent = cfg.Ui?.Theme?.Accent;
             UltraCompact   = cfg.Ui?.UltraCompact ?? false;
             AlwaysOnTop    = cfg.Ui?.AlwaysOnTop ?? false;
+            ShowClaudeCredits = cfg.Ui?.ShowClaudeCredits ?? false;
 
             ClaudeConnected     = claudeConnected;
             ChatGptConnected    = !string.IsNullOrWhiteSpace(cfg.ChatGptWeb?.SessionToken);

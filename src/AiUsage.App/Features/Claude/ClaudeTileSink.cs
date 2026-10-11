@@ -48,4 +48,27 @@ internal sealed class ClaudeTileSink : IUsageSink
 
         return Task.CompletedTask;
     }
+
+    public Task EmitCreditsAsync(IReadOnlyList<CreditSnapshot> credits)
+    {
+        var prepaid  = credits.FirstOrDefault(c => c.Kind == CreditKind.Prepaid);
+        var included = credits.FirstOrDefault(c => c.Kind == CreditKind.Included);
+
+        var prepaidLabel  = prepaid  is null ? "" : TileMapping.Credits(prepaid.Amount, prepaid.Currency);
+        var includedLabel = included is null ? "" : TileMapping.Credits(included.Amount, included.Currency);
+        var expires = included?.ExpiresAt is { } at
+            ? $"expires {TileMapping.ResetsIn(at, ResetFormat.Coarse)}"
+            : null; // null (not "") so the row shows no empty tooltip
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            _tile.HasCredits            = prepaid is not null;
+            _tile.CreditsLabel          = prepaidLabel;
+            _tile.HasIncludedCredit     = included is not null;
+            _tile.IncludedCreditLabel   = includedLabel;
+            _tile.IncludedCreditExpires = expires;
+        });
+
+        return Task.CompletedTask;
+    }
 }

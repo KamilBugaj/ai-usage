@@ -1,53 +1,53 @@
-# KB.AI.Usage — Project Context
+# KB.AI.Usage: Project Context
 
 ## Goal
 
-Multi-platform desktop app that aggregates AI usage stats across providers into a single tile-based dashboard.
+Desktop tray app that shows AI usage limits from several providers as tiles in one dashboard.
 
-Active providers (tiles shown in the UI):
-- Claude.ai (`ClaudeWebAdapter`) — in-app WebView2 login; reads 5h + 7d limits
-- ChatGPT (`ChatGptWebAdapter`) — in-app WebView2 login; usage API is paid-plan only
-  (Plus/Pro/Codex), free accounts get a "needs a paid plan" message
-- GitHub Copilot (`CopilotApiAdapter`) — GitHub OAuth **device flow** (browser authorize),
-  then `api.github.com/copilot_internal/user` for the premium-interactions % quota
-
-Providers connect from the in-app Settings panel (Connect / Disconnect); credentials/tokens
-are persisted to config, so no manual token pasting is needed.
-
-(Earlier dormant adapters — Anthropic API, OpenAI API, Copilot log scraper — were removed
-in the VSA refactor; recover from git history if ever needed.)
+Providers (connect / disconnect in Settings; tokens persist to config, nothing is pasted by hand):
+- Claude.ai (`ClaudeWebAdapter`): WebView2 login; 5h + 7d limits, optional credit balances
+- ChatGPT (`ChatGptWebAdapter`): WebView2 login; the plan's window from `wham/usage` (5h on
+  Plus/Pro, ~30d on free) or a Business seat's monthly credit allowance (spend-controls)
+- GitHub Copilot (`CopilotApiAdapter`): OAuth device flow; premium-request % from
+  `api.github.com/copilot_internal/user`
 
 ## Stack
 
-- .NET 10 / C#
-- Avalonia UI (cross-platform: Windows, macOS, Linux)
-- WebView2 (Windows) for web-based session scraping
-- Three projects `App → Application → Core` (UI / orchestration / domain). Application and
+- .NET 10 / C#, Avalonia UI (Windows, macOS, Linux), WebView2 for the signed-in web sessions
+- Three projects `App → Application → Core` (UI / orchestration / domain); Application and
   Core have no Avalonia reference. See `ARCHITECTURE.md`.
-- Feature-per-provider vertical slice: `App/Features/<Provider>/` (ViewModel + View + Sink +
-  Feature) and `App/Providers/` connectors for auth. Shared bits live in `App/Features/`:
-  `WebViewSession` (WebView2 sign-in/restore/fetch) and `SingleBarTileSink` (one-window tiles).
-- Core adapters in `AiUsage.Core/Adapters/`; poll loop + tile mapping in `AiUsage.Application`.
+- One vertical slice per provider: `App/Features/<Provider>/` (ViewModel, View, Sink, Feature),
+  auth connectors in `App/Providers/`. Shared: `WebViewSession`, `SingleBarTileSink`.
+- Adapters in `AiUsage.Core/Adapters/`; poll loop + tile text mapping in `AiUsage.Application`.
 
 ## Constraints
 
-- No additional runtimes (no Node, no Python in app logic)
-- Windows primary target; Avalonia enables cross-platform where WebView2 not required
-- Config (incl. session tokens) at `%AppData%\AiUsage\config.json` (Windows) /
-  `~/.config/AiUsage/config.json`; managed via the in-app Settings, not hand-edited
-- WebView2 user-data + cookies under `%AppData%\AiUsage\WebView2`
-- CI/CD via GitHub Actions (`.github/workflows/`)
+- No extra runtimes (no Node, no Python in app logic)
+- Windows is the primary target; other OSes only where WebView2 is not needed
+- Config incl. session tokens: `%AppData%\AiUsage\config.json` (`~/.config/AiUsage/` elsewhere),
+  edited only through Settings. WebView2 profile: `%AppData%\AiUsage\WebView2`.
+- CI/CD: GitHub Actions (`.github/workflows/`)
+- Adapters parse ONE shape per endpoint: a body captured from a live account (or read from an
+  official open-source client), pinned as a fixture in the adapter's tests. No field aliases,
+  scale guessing, alternative endpoints or "Shape A/B/C" fallbacks. Payload changed: capture
+  the new body, update the fixture, then the parser. A poll that finds no data throws.
 
 ## UI / settings
 
-In-app Settings panel (same window as the dashboard) covers: themes (Mocha/Latte/Nord)
-+ accent swatches with live preview, per-tile enable/disable, drag-to-reorder, S/L size,
-and a mandatory alert threshold (default 80% for the %-based providers). Usage bars are
-tri-coloured (green → yellow near the threshold → red at/over it); time-to-reset shows as
-a filling ring with a hover tooltip.
+Settings (in the dashboard window): theme (Mocha / Latte / Nord) + accent with live preview,
+per-tile enable, drag-to-reorder, S/L size, alert threshold (default 80%). Bars go green →
+yellow near the threshold → red at it; time to reset is a filling ring with a tooltip.
 
-Ultra compact mode (Appearance checkbox, `UiConfig.UltraCompact`): chrome-less 240 px
-dashboard — no header, minimal single/dual-row tiles (9 px text, 3 px bars, 11 px rings),
-click anywhere hides to tray, details move to hover tooltips. The per-tile Large toggle
-is hidden while active (sizes stay stored). Settings remain reachable from the tray menu
-and always render at full width.
+Ultra compact (`UiConfig.UltraCompact`): chrome-less 240 px dashboard, no header, minimal
+tiles (9 px text, 3 px bars, 11 px rings), click anywhere hides to tray, details move to
+tooltips. The Large toggle is hidden while active (sizes stay stored). Settings open from
+the tray menu and always render full width.
+
+Claude credits (`UiConfig.ShowClaudeCredits`, checkbox under Providers → Claude.ai, default
+off): one `Credits:` line on the Claude tile, balances on the right, in every layout.
+- `purchased`: credits the user bought. `GET /api/organizations/{org}/prepaid/credits`,
+  `amount` in CENTS. One extra request per poll.
+- `bonus`: free grant from Anthropic ("Included credit" on claude.ai), shown only while it
+  has money left and is not expired or locked. `iguana_necktie` in the `/usage` body already
+  fetched, `remaining_dollars` in WHOLE DOLLARS, `resets_at` = expiry.
+A failed credits read hides that balance and never touches the 5h / 7d bars.

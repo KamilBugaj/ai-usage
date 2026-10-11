@@ -27,6 +27,27 @@ public class TileMappingTests
     public void AlertActive_ComparesAgainstThreshold(double util, double threshold, bool expected)
         => Assert.Equal(expected, TileMapping.AlertActive(util, threshold));
 
+    // ── Credits ───────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(12.34,   "USD", "$12.34")]
+    [InlineData(0,       "USD", "$0.00")]
+    [InlineData(100,     "USD", "$100.00")]
+    [InlineData(1234.5,  "USD", "$1,234.50")]
+    [InlineData(12.34,   "EUR", "12.34 EUR")]
+    public void Credits_FormatsAmountWithCurrency(double amount, string currency, string expected)
+        => Assert.Equal(expected, TileMapping.Credits((decimal)amount, currency));
+
+    [Fact]
+    public void Credits_IgnoresCurrentCulture()
+    {
+        // pl-PL would otherwise render "12,34" — the tile must not depend on the OS locale.
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("pl-PL");
+        try { Assert.Equal("$12.34", TileMapping.Credits(12.34m, "USD")); }
+        finally { System.Globalization.CultureInfo.CurrentCulture = previous; }
+    }
+
     // ── ResetsIn ──────────────────────────────────────────────────────────────
 
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);

@@ -178,6 +178,12 @@
                                     Background="{DynamicResource Surface2Brush}"
                                     Foreground="{DynamicResource DangerBrush}" CornerRadius="6"/>
                         </StackPanel>
+                        <CheckBox IsChecked="{Binding Settings.ShowClaudeCredits}"
+                                  Content="Show usage credits"
+                                  Foreground="{DynamicResource TextBrush}" FontSize="12"/>
+                        <TextBlock Text="Adds the credits you purchased to the Claude tile, plus any bonus credits from Anthropic while you have some."
+                                   FontSize="11" Foreground="{DynamicResource MutedBrush}"
+                                   TextWrapping="Wrap"/>
                     </StackPanel>
 
                     <!-- ChatGPT -->

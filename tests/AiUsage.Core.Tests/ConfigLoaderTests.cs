@@ -215,6 +215,33 @@ public class ConfigLoaderTests
         finally { File.Delete(path); }
     }
 
+    // ── Ui.ShowClaudeCredits ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Load_UiSectionWithoutShowClaudeCredits_DefaultsFalse()
+    {
+        // Configs written before the field existed must keep the balance row off.
+        var path = WriteTempJson("""{"ui":{"ultraCompact":true}}""");
+        try
+        {
+            var cfg = ConfigLoader.Load(path);
+            Assert.False(cfg.Ui?.ShowClaudeCredits ?? false);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_UiShowClaudeCreditsTrue_DeserializesCorrectly()
+    {
+        var path = WriteTempJson("""{"ui":{"showClaudeCredits":true}}""");
+        try
+        {
+            var cfg = ConfigLoader.Load(path);
+            Assert.True(cfg.Ui?.ShowClaudeCredits);
+        }
+        finally { File.Delete(path); }
+    }
+
     private static string WriteTempJson(string json)
     {
         var path = Path.Combine(Path.GetTempPath(), $"aiusage_cfg_{Guid.NewGuid():N}.json");

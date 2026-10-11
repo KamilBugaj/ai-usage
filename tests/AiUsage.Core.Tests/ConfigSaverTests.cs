@@ -168,6 +168,24 @@ public class ConfigSaverTests
         finally { TryDelete(path); }
     }
 
+    // ── Save (Ui.ShowClaudeCredits round-trip) ───────────────────────────────
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Save_UiShowClaudeCredits_RoundTrips(bool value)
+    {
+        var path = TempPath();
+        try
+        {
+            var config = new AppConfig(Ui: new UiConfig(ShowClaudeCredits: value));
+            ConfigSaver.Save(path, config);
+            var loaded = ConfigLoader.Load(path);
+            Assert.Equal(value, loaded.Ui?.ShowClaudeCredits);
+        }
+        finally { TryDelete(path); }
+    }
+
     private static string TempPath() =>
         Path.Combine(Path.GetTempPath(), $"aiusage_cfg_{Guid.NewGuid():N}.json");
 

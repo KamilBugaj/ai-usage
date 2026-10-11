@@ -105,7 +105,7 @@
                        IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        TextWrapping="Wrap"/>
 
-            <!-- No bar to show (not connected / needs a paid plan) — surface the status
+            <!-- No bar to show (not connected / no usage data) — surface the status
                  line instead of leaving the tile blank. -->
             <TextBlock Text="{Binding StatusLine}" FontSize="9" Foreground="{DynamicResource MutedBrush}"
                        TextWrapping="Wrap">

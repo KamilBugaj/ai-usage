@@ -122,7 +122,9 @@ public partial class App : Avalonia.Application
     {
         return baseCfg with
         {
-            Ui = new UiConfig(s.CurrentTheme, s.BuildTileConfigs(), s.UltraCompact, s.AlwaysOnTop)
+            Ui = new UiConfig(
+                s.CurrentTheme, s.BuildTileConfigs(), s.UltraCompact, s.AlwaysOnTop,
+                s.ShowClaudeCredits)
             // ClaudeWeb / ChatGptWeb / Copilot preserved from baseCfg (written by their
             // connect flows).
         };

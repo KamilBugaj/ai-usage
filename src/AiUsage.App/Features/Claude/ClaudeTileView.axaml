@@ -111,6 +111,50 @@
                                IsVisible="{Binding IsLarge}"/>
                 </StackPanel>
 
+                <!-- Balances (opt-in in Settings; both sizes): "Credits:" on the left, the
+                     balances grouped on the right, each figure right next to its label and in
+                     the bright text colour. Expiry line is large only. -->
+                <Border Height="1" Background="{DynamicResource TrackBrush}"
+                        IsVisible="{Binding HasAnyCredit}"/>
+                <StackPanel Spacing="3" IsVisible="{Binding HasAnyCredit}">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
+                        <TextBlock Grid.Column="0" Text="Credits:" FontSize="12"
+                                   Foreground="{DynamicResource SubtextBrush}" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                    IsVisible="{Binding HasCredits}"
+                                    Background="Transparent" ToolTip.Tip="Credits you purchased">
+                            <TextBlock Text="Purchased" FontSize="12"
+                                       Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding CreditsLabel}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="14,0,0,0"
+                                    IsVisible="{Binding HasIncludedCredit}"
+                                    Background="Transparent">
+                            <ToolTip.Tip>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Bonus credits from Anthropic"/>
+                                    <TextBlock Text="{Binding IncludedCreditExpires}"
+                                               IsVisible="{Binding IncludedCreditExpires, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                </StackPanel>
+                            </ToolTip.Tip>
+                            <TextBlock Text="Bonus" FontSize="12"
+                                       Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding IncludedCreditLabel}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding IncludedCreditExpires}" FontSize="11"
+                               Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Right">
+                        <TextBlock.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="IncludedCreditExpires" Converter="{x:Static StringConverters.IsNotNullOrEmpty}"/>
+                                <Binding Path="IsLarge"/>
+                            </MultiBinding>
+                        </TextBlock.IsVisible>
+                    </TextBlock>
+                </StackPanel>
+
                 <!-- Last updated (large only) -->
                 <TextBlock Text="{Binding UpdatedAt}" FontSize="10" Foreground="{DynamicResource FaintBrush}">
                     <TextBlock.IsVisible>
@@ -133,6 +177,16 @@
                                IsVisible="{Binding HasLimit}"/>
                     <TextBlock Text="{Binding WeeklyResetsAt, StringFormat='7d {0}'}"
                                IsVisible="{Binding HasWeeklyLimit}"/>
+                    <TextBlock Text="{Binding CreditsLabel, StringFormat='Purchased credits: {0}'}"
+                               IsVisible="{Binding HasCredits}"/>
+                    <TextBlock IsVisible="{Binding HasIncludedCredit}">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="Bonus credits from Anthropic: {0} {1}">
+                                <Binding Path="IncludedCreditLabel"/>
+                                <Binding Path="IncludedCreditExpires"/>
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
                     <TextBlock Text="{Binding UpdatedAt}"
                                IsVisible="{Binding UpdatedAt, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                 </StackPanel>
@@ -193,6 +247,32 @@
                                     Diameter="11" Thickness="2"
                                     RingBrush="{DynamicResource AccentBrush}"
                                     Fraction="{Binding WeeklyResetFraction}"/>
+                </Grid>
+
+                <!-- Balances: "Credits:" on the left, the balances grouped on the right, each
+                     figure right next to its label and in the bright text colour.
+                     "purchased" = credits the user bought, "bonus" = the free grant from
+                     Anthropic (its expiry is in the tooltip). If the line ever runs out of
+                     room it is the "Credits:" caption that gives way, not a figure. -->
+                <Border Height="1" Margin="16,1,0,1" Background="{DynamicResource TrackBrush}"
+                        IsVisible="{Binding HasAnyCredit}"/>
+                <Grid ColumnDefinitions="16,*,Auto,Auto" IsVisible="{Binding HasAnyCredit}">
+                    <TextBlock Grid.Column="1" Text="Credits:" FontSize="9" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource SubtextBrush}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                                IsVisible="{Binding HasCredits}">
+                        <TextBlock Text="purchased" FontSize="9"
+                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding CreditsLabel}" FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" Margin="9,0,0,0"
+                                IsVisible="{Binding HasIncludedCredit}">
+                        <TextBlock Text="bonus" FontSize="9"
+                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding IncludedCreditLabel}" FontSize="9" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
                 </Grid>
             </StackPanel>
         </StackPanel>

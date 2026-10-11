@@ -3,6 +3,11 @@ namespace AiUsage.Core.Models;
 public interface IUsageSink
 {
     Task EmitAsync(LimitSnapshot s);
+
+    // The complete set of balances for this poll: a kind missing from the list is
+    // unavailable right now, so a sink showing it hides it.
+    // Defaulted because only tiles that display a balance need it.
+    Task EmitCreditsAsync(IReadOnlyList<CreditSnapshot> credits) => Task.CompletedTask;
 }
 
 public interface ISourceAdapter
