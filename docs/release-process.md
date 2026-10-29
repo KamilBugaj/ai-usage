@@ -50,12 +50,11 @@ https://github.com/settings/tokens?type=beta rather than assuming a fixed lifeti
 The previous entry claimed a 90-day lifetime for a token that lapsed after 31 days,
 and the resulting outage went unnoticed for a week.
 
-**Symptom of expiry:** the daily `Prune release assets` run goes red with
-`non-200 OK status code: 401 Unauthorized ... "Bad credentials"`. That workflow is
-the early warning, and the only one that fails quietly, so a lapsed token can sit
-unnoticed for weeks. The same secret also gates the README push and
-`action-gh-release` in `release.yml`, so an expired token breaks a release halfway
-through, after the builds have already run.
+**Symptom of expiry:** `Sync public README` or the `publish` job of `release.yml`
+fails with `401 Unauthorized ... "Bad credentials"`. Nothing runs on a schedule, so
+a lapsed token shows up only when one of those runs. An expired token breaks a
+release halfway through, after the builds have already run, so run step 4 before
+tagging whenever the expiry date is close.
 
 1. Go to https://github.com/settings/tokens?type=beta
 2. Renew the token, or generate a new one: resource owner `KamilBugaj`, repository
@@ -66,9 +65,10 @@ through, after the builds have already run.
    ```
    (or github.com → ai-usage → Settings → Secrets and variables → Actions →
    `RELEASES_REPO_TOKEN` → Update secret)
-4. Verify without waiting for the cron:
+4. Verify (clones and pushes to the releases repo; commits nothing when the README
+   is unchanged):
    ```
-   gh workflow run prune-releases.yml --repo KamilBugaj/ai-usage
+   gh workflow run sync-public-readme.yml --repo KamilBugaj/ai-usage
    ```
 
 ## Rolling back a bad release
