@@ -146,11 +146,3 @@ jobs:
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
-
-      # Asset retention on the public releases repo (keeps the release entry + tag
-      # for history; strips only the heavy download assets). Shared with the
-      # scheduled prune-releases workflow.
-      - name: Prune old release assets (keep 5 newest or 60 days)
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
-        run: bash .github/scripts/prune-release-assets.sh
